@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { colors, shadows } from '../constants/colors';
+import { useAppTheme } from '../hooks/useAppTheme';
 import { textStyles } from '../constants/typography';
 import { spacing, borderRadius } from '../constants/spacing';
 import { useExam } from '../hooks/useExam';
@@ -27,6 +27,7 @@ interface QuizLandingViewProps {
 
 export const QuizLandingView = ({ examId, title, description, duration }: QuizLandingViewProps) => {
     const navigation = useNavigation<any>();
+    const { colors, shadows } = useAppTheme();
     const { exam, sections, fetchAttempts, checkExamEligibility } = useExam(examId);
 
     const [attempts, setAttempts] = useState<any[]>([]);
@@ -82,6 +83,197 @@ export const QuizLandingView = ({ examId, title, description, duration }: QuizLa
         });
     };
 
+    const styles = StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: colors.background,
+        },
+        contentContainer: {
+            padding: spacing.lg,
+            paddingBottom: 100,
+        },
+        loadingContainer: {
+            flex: 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: 300,
+            backgroundColor: colors.background,
+        },
+        headerCard: {
+            backgroundColor: colors.surface,
+            borderRadius: borderRadius.xl,
+            marginBottom: spacing.xl,
+            ...shadows.medium,
+            overflow: 'hidden',
+            borderWidth: 1,
+            borderColor: colors.border,
+        },
+        headerGradient: {
+            padding: spacing.xl,
+            alignItems: 'center',
+        },
+        iconContainer: {
+            width: 80,
+            height: 80,
+            borderRadius: 40,
+            backgroundColor: colors.surfaceAlt,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: spacing.lg,
+        },
+        title: {
+            fontSize: 24,
+            fontWeight: 'bold',
+            color: colors.text,
+            textAlign: 'center',
+            marginBottom: spacing.sm,
+        },
+        description: {
+            fontSize: 14,
+            color: colors.textSecondary,
+            textAlign: 'center',
+            marginBottom: spacing.lg,
+            lineHeight: 20,
+            paddingHorizontal: spacing.md,
+        },
+        statsRow: {
+            flexDirection: 'column',
+            alignItems: 'flex-start',
+            width: '100%',
+            marginTop: spacing.md,
+            gap: spacing.sm,
+            borderTopWidth: 1,
+            borderTopColor: colors.border,
+            paddingTop: spacing.lg,
+        },
+        statItem: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.sm,
+        },
+        statText: {
+            fontSize: 14,
+            color: colors.textSecondary,
+            fontWeight: '500',
+        },
+        attemptsSection: {
+            marginBottom: spacing.xl,
+        },
+        sectionTitle: {
+            fontSize: 18,
+            fontWeight: 'bold',
+            color: colors.text,
+            marginBottom: spacing.md,
+        },
+        attemptCard: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            backgroundColor: colors.surface,
+            padding: spacing.md,
+            borderRadius: borderRadius.lg,
+            marginBottom: spacing.sm,
+            borderWidth: 1,
+            borderColor: colors.border,
+            ...shadows.small,
+        },
+        attemptLeft: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            flex: 1,
+        },
+        attemptBadge: {
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            backgroundColor: colors.surfaceAlt,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginRight: spacing.md,
+        },
+        attemptNumber: {
+            fontSize: 14,
+            fontWeight: 'bold',
+            color: colors.text,
+        },
+        attemptTitle: {
+            fontSize: 14,
+            fontWeight: '600',
+            color: colors.text,
+            marginBottom: 2,
+        },
+        attemptDate: {
+            fontSize: 12,
+            color: colors.textSecondary,
+        },
+        scoreText: {
+            fontSize: 12,
+            color: colors.textSecondary,
+            marginTop: 2,
+        },
+        statusText: {
+            fontSize: 12,
+            color: colors.warning,
+            marginTop: 2,
+            fontWeight: '500',
+        },
+        viewResultButton: {
+            paddingVertical: 6,
+            paddingHorizontal: 12,
+            borderRadius: borderRadius.md,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+        },
+        viewResultText: {
+            fontSize: 12,
+            fontWeight: '600',
+            color: colors.text,
+        },
+        resumeButton: {
+            paddingVertical: 6,
+            paddingHorizontal: 12,
+            borderRadius: borderRadius.md,
+            backgroundColor: colors.primary,
+        },
+        resumeText: {
+            fontSize: 12,
+            fontWeight: '600',
+            color: colors.textInverse,
+        },
+        footer: {
+            marginTop: spacing.md,
+        },
+        startButton: {
+            borderRadius: borderRadius.lg,
+            overflow: 'hidden',
+            ...shadows.medium,
+        },
+        startButtonGradient: {
+            paddingVertical: spacing.lg,
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        startButtonText: {
+            fontSize: 16,
+            fontWeight: 'bold',
+            color: colors.textInverse,
+            textTransform: 'uppercase',
+            letterSpacing: 1,
+        },
+        disabledButton: {
+            backgroundColor: colors.surfaceAlt,
+            paddingVertical: spacing.lg,
+            borderRadius: borderRadius.lg,
+            alignItems: 'center',
+        },
+        disabledButtonText: {
+            fontSize: 16,
+            fontWeight: '600',
+            color: colors.textDisabled,
+        },
+    });
+
     if (loading) {
         return (
             <View style={styles.loadingContainer}>
@@ -99,34 +291,36 @@ export const QuizLandingView = ({ examId, title, description, duration }: QuizLa
         <ScrollView
             style={styles.container}
             contentContainerStyle={styles.contentContainer}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         >
             {/* Header Card */}
             <View style={styles.headerCard}>
                 <LinearGradient
-                    colors={['#ffffff', '#f8f9fa']}
+                    colors={colors.gradients.primary as any}
                     style={styles.headerGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
                 >
                     <View style={styles.iconContainer}>
                         <Ionicons name="school" size={48} color={colors.primary} />
                     </View>
-                    <Text style={styles.title}>{title}</Text>
+                    <Text style={[styles.title, { color: colors.textInverse }]}>{title}</Text>
                     {(description || exam?.description) && (
-                        <Text style={styles.description}>{description || exam?.description}</Text>
+                        <Text style={[styles.description, { color: colors.textInverse }]}>{description || exam?.description}</Text>
                     )}
 
-                    <View style={styles.statsRow}>
+                    <View style={[styles.statsRow, { borderTopColor: 'rgba(255,255,255,0.2)' }]}>
                         <View style={styles.statItem}>
-                            <Ionicons name="help-circle-outline" size={20} color={colors.textSecondary} />
-                            <Text style={styles.statText}>{questionsCount} questions</Text>
+                            <Ionicons name="help-circle-outline" size={20} color={colors.textInverse} />
+                            <Text style={[styles.statText, { color: colors.textInverse }]}>{questionsCount} questions</Text>
                         </View>
                         <View style={styles.statItem}>
-                            <Ionicons name="time-outline" size={20} color={colors.textSecondary} />
-                            <Text style={styles.statText}>{duration || exam?.duration_minutes || 60} minutes</Text>
+                            <Ionicons name="time-outline" size={20} color={colors.textInverse} />
+                            <Text style={[styles.statText, { color: colors.textInverse }]}>{duration || exam?.duration_minutes || 60} minutes</Text>
                         </View>
                         <View style={styles.statItem}>
-                            <Ionicons name="repeat-outline" size={20} color={colors.textSecondary} />
-                            <Text style={styles.statText}>
+                            <Ionicons name="repeat-outline" size={20} color={colors.textInverse} />
+                            <Text style={[styles.statText, { color: colors.textInverse }]}>
                                 {isUnlimited ? 'Unlimited Attempts' : `${attemptsLeft} Attempts Left`}
                             </Text>
                         </View>
@@ -228,7 +422,7 @@ export const QuizLandingView = ({ examId, title, description, duration }: QuizLa
                         activeOpacity={0.8}
                     >
                         <LinearGradient
-                            colors={[colors.primary, '#FF8A65']}
+                            colors={colors.gradients.primary as any}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 0 }}
                             style={styles.startButtonGradient}
@@ -249,193 +443,3 @@ export const QuizLandingView = ({ examId, title, description, duration }: QuizLa
         </ScrollView>
     );
 };
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#F5F7FA',
-    },
-    contentContainer: {
-        padding: spacing.lg,
-        paddingBottom: 100,
-    },
-    loadingContainer: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: 300,
-    },
-    headerCard: {
-        backgroundColor: '#fff',
-        borderRadius: borderRadius.xl,
-        marginBottom: spacing.xl,
-        ...shadows.medium,
-        overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: '#E1E4E8',
-    },
-    headerGradient: {
-        padding: spacing.xl,
-        alignItems: 'center',
-    },
-    iconContainer: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: '#FFF5F2',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: spacing.lg,
-    },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#1A1A1A',
-        textAlign: 'center',
-        marginBottom: spacing.sm,
-    },
-    description: {
-        fontSize: 14,
-        color: colors.textSecondary,
-        textAlign: 'center',
-        marginBottom: spacing.lg,
-        lineHeight: 20,
-        paddingHorizontal: spacing.md,
-    },
-    statsRow: {
-        flexDirection: 'column',
-        alignItems: 'flex-start',
-        width: '100%',
-        marginTop: spacing.md,
-        gap: spacing.sm,
-        borderTopWidth: 1,
-        borderTopColor: '#F0F0F0',
-        paddingTop: spacing.lg,
-    },
-    statItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.sm,
-    },
-    statText: {
-        fontSize: 14,
-        color: '#4A5568',
-        fontWeight: '500',
-    },
-    attemptsSection: {
-        marginBottom: spacing.xl,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#1A1A1A',
-        marginBottom: spacing.md,
-    },
-    attemptCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: '#fff',
-        padding: spacing.md,
-        borderRadius: borderRadius.lg,
-        marginBottom: spacing.sm,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        ...shadows.small,
-    },
-    attemptLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-    },
-    attemptBadge: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: '#EDF2F7',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: spacing.md,
-    },
-    attemptNumber: {
-        fontSize: 14,
-        fontWeight: 'bold',
-        color: '#4A5568',
-    },
-    attemptTitle: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#2D3748',
-        marginBottom: 2,
-    },
-    attemptDate: {
-        fontSize: 12,
-        color: '#718096',
-    },
-    scoreText: {
-        fontSize: 12,
-        color: colors.textSecondary,
-        marginTop: 2,
-    },
-    statusText: {
-        fontSize: 12,
-        color: colors.warning,
-        marginTop: 2,
-        fontWeight: '500',
-    },
-    viewResultButton: {
-        paddingVertical: 6,
-        paddingHorizontal: 12,
-        borderRadius: borderRadius.md,
-        borderWidth: 1,
-        borderColor: '#CBD5E0',
-        backgroundColor: '#fff',
-    },
-    viewResultText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: '#4A5568',
-    },
-    resumeButton: {
-        paddingVertical: 6,
-        paddingHorizontal: 12,
-        borderRadius: borderRadius.md,
-        backgroundColor: colors.primary,
-    },
-    resumeText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: '#fff',
-    },
-    footer: {
-        marginTop: spacing.md,
-    },
-    startButton: {
-        borderRadius: borderRadius.lg,
-        overflow: 'hidden',
-        ...shadows.medium,
-    },
-    startButtonGradient: {
-        paddingVertical: spacing.lg,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    startButtonText: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#fff',
-        textTransform: 'uppercase',
-        letterSpacing: 1,
-    },
-    disabledButton: {
-        backgroundColor: '#E2E8F0',
-        paddingVertical: spacing.lg,
-        borderRadius: borderRadius.lg,
-        alignItems: 'center',
-    },
-    disabledButtonText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#718096',
-    },
-});

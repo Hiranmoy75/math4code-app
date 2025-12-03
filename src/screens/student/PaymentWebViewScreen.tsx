@@ -28,7 +28,6 @@ export const PaymentWebViewScreen = () => {
     const [isWebViewLoading, setIsWebViewLoading] = useState(true);
     const [isVerifying, setIsVerifying] = useState(false);
     const [verificationAttempted, setVerificationAttempted] = useState(false);
-    const [status, setStatus] = useState('pending'); // For Web Polling
 
     // Safety timeout for loading state
     useEffect(() => {
@@ -36,7 +35,7 @@ export const PaymentWebViewScreen = () => {
         if (isWebViewLoading) {
             timeout = setTimeout(() => {
                 if (isWebViewLoading) {
-                    console.log('WebView loading timed out - forcing hide');
+
                     setIsWebViewLoading(false);
                 }
             }, 15000); // 15 seconds timeout
@@ -67,12 +66,7 @@ export const PaymentWebViewScreen = () => {
             if (isVerifying || verificationAttempted) return;
 
             try {
-                console.log('Polling payment status on web...');
-                // We re-use verifyPayment here as a status check
-                // Ideally, there should be a separate check-status endpoint, 
-                // but verifyPayment usually handles idempotency.
-                // If not, we might need a dedicated checkStatus API.
-                // Assuming verifyPayment returns success if already paid.
+
                 const response = await api.verifyPayment(transactionId, courseId);
 
                 if (response.success) {
@@ -80,19 +74,13 @@ export const PaymentWebViewScreen = () => {
                     handlePaymentVerification();
                 }
             } catch (error: any) {
-                // Ignore errors during polling, as payment might not be complete
-                console.log('Polling check failed (expected if not paid yet):', error);
 
-                // If it's a CORS error (network error on web), warn the user once
+
                 if (Platform.OS === 'web' && error.message && error.message.includes('Network request failed') && !verificationAttempted) {
-                    // We can't easily detect "CORS" specifically, but "Network request failed" is the generic error.
-                    // However, we don't want to spam alerts.
-                    // Ideally, we just log it. The user has seen the console error.
-                    // But let's add a small toast or log to help them.
-                    console.warn('Possible CORS error detected. Ensure your backend allows localhost or disable CORS in browser.');
+
                 }
             }
-        }, 5000); // Poll every 5 seconds
+        }, 5000);
 
         return () => clearInterval(interval);
     }, [Platform.OS, isVerifying, verificationAttempted, transactionId, courseId]);
@@ -103,7 +91,7 @@ export const PaymentWebViewScreen = () => {
         setIsVerifying(true);
 
         try {
-            console.log('Verifying payment for transaction:', transactionId);
+
             const response = await api.verifyPayment(transactionId, courseId);
 
             if (response.success) {
@@ -155,17 +143,24 @@ export const PaymentWebViewScreen = () => {
 
     const handleNavigationStateChange = (navState: any) => {
         const { url, loading } = navState;
-        console.log('WebView NavState:', { url, loading });
 
-        if (url.includes('/payment/success') || url.includes('/api/phonepe/redirect')) {
-            console.log('Success redirect detected');
+
+        // Check for success redirect, OR any return to our domain (including login redirect)
+        if (
+            url.includes('/payment/success') ||
+            url.includes('/api/phonepe/redirect') ||
+            url.includes('/login') ||
+            (url.includes('math4code.com') && !url.includes('google.com'))
+        ) {
+
             webViewRef.current?.stopLoading();
             handlePaymentVerification();
             return;
         }
 
+        // Check for failure redirect
         if (url.includes('/payment/failed')) {
-            console.log('Failure redirect detected');
+
             webViewRef.current?.stopLoading();
             Alert.alert(
                 "Payment Failed",
@@ -249,12 +244,12 @@ export const PaymentWebViewScreen = () => {
                     onNavigationStateChange={handleNavigationStateChange}
                     onLoadStart={(syntheticEvent) => {
                         const { nativeEvent } = syntheticEvent;
-                        console.log('WebView Load Start:', nativeEvent.url);
+
                         setIsWebViewLoading(true);
                     }}
                     onLoadEnd={(syntheticEvent) => {
                         const { nativeEvent } = syntheticEvent;
-                        console.log('WebView Load End:', nativeEvent.url);
+
                         setIsWebViewLoading(false);
                     }}
                     onError={(syntheticEvent) => {

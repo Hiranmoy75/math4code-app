@@ -24,7 +24,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { useCourseDetails } from '../../hooks/useCourseDetails';
 import { useCourseProgress } from '../../hooks/useLessonProgress';
-import { colors, shadows } from '../../constants/colors';
+import { useAppTheme } from '../../hooks/useAppTheme';
 import { textStyles } from '../../constants/typography';
 import { spacing, borderRadius } from '../../constants/spacing';
 import { Module, Lesson } from '../../types';
@@ -40,8 +40,272 @@ const { width } = Dimensions.get('window');
 export const CourseDetailsScreen = () => {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
+    const { colors, shadows } = useAppTheme();
     const { courseId } = route.params;
     const appState = useRef(AppState.currentState);
+
+    const styles = StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: colors.background,
+        },
+        loadingContainer: {
+            flex: 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        loadingText: {
+            marginTop: spacing.md,
+            color: colors.textSecondary,
+        },
+        errorContainer: {
+            flex: 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        errorText: {
+            ...textStyles.h3,
+            color: colors.error,
+            marginBottom: spacing.md,
+        },
+        backText: {
+            ...textStyles.body,
+            color: colors.primary,
+        },
+        // Enrolled Header Styles
+        header: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            paddingHorizontal: spacing.md,
+            paddingVertical: spacing.sm,
+        },
+        backButton: {
+            padding: spacing.sm,
+        },
+        headerActions: {
+            flexDirection: 'row',
+        },
+        headerIcon: {
+            marginLeft: spacing.md,
+            padding: spacing.xs,
+            backgroundColor: '#FFE0D6', // Light orange circle bg
+            borderRadius: borderRadius.full,
+        },
+        enrolledHeader: {
+            marginBottom: spacing.xl,
+            paddingHorizontal: spacing.lg,
+        },
+        // Landing Header Styles (Overlay)
+        headerOverlay: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            paddingHorizontal: spacing.md,
+            paddingVertical: spacing.sm,
+            position: 'absolute',
+            top: 40,
+            left: 0,
+            right: 0,
+            zIndex: 10,
+        },
+        backButtonOverlay: {
+            padding: spacing.sm,
+            backgroundColor: 'rgba(255,255,255,0.8)',
+            borderRadius: borderRadius.full,
+        },
+        headerIconOverlay: {
+            marginLeft: spacing.md,
+            padding: spacing.sm,
+            backgroundColor: 'rgba(255,255,255,0.8)',
+            borderRadius: borderRadius.full,
+        },
+        content: {
+            flex: 1,
+        },
+        bannerContainer: {
+            height: 250,
+            width: '100%',
+        },
+        bannerImage: {
+            width: '100%',
+            height: '100%',
+            resizeMode: 'cover',
+        },
+        bannerGradient: {
+            width: '100%',
+            height: '100%',
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        landingHeader: {
+            padding: spacing.lg,
+            backgroundColor: colors.surface,
+            borderTopLeftRadius: borderRadius.xl,
+            borderTopRightRadius: borderRadius.xl,
+            marginTop: -20,
+        },
+        courseTitle: {
+            ...textStyles.h3,
+            color: colors.text,
+            marginBottom: spacing.xs,
+        },
+        instructorName: {
+            ...textStyles.body,
+            color: colors.textSecondary,
+            marginBottom: spacing.md,
+        },
+        courseDescription: {
+            ...textStyles.body,
+            color: colors.textSecondary,
+            marginBottom: spacing.lg,
+            lineHeight: 22,
+        },
+        metaRow: {
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: spacing.lg,
+            marginBottom: spacing.lg,
+        },
+        metaItem: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.xs,
+        },
+        metaText: {
+            ...textStyles.caption,
+            color: colors.textSecondary,
+        },
+        progressSection: {
+            marginBottom: spacing.sm,
+            marginTop: spacing.md,
+        },
+        progressText: {
+            ...textStyles.caption,
+            color: colors.textSecondary,
+            marginBottom: spacing.xs,
+        },
+        progressBarBg: {
+            height: 6,
+            backgroundColor: colors.border,
+            borderRadius: 3,
+        },
+        progressBarFill: {
+            height: '100%',
+            backgroundColor: colors.primary,
+            borderRadius: 3,
+        },
+        sectionTitle: {
+            ...textStyles.h4,
+            paddingHorizontal: spacing.lg,
+            marginBottom: spacing.md,
+            marginTop: spacing.md,
+        },
+        modulesList: {
+            paddingBottom: 100, // Space for footer
+        },
+        moduleCard: {
+            marginBottom: spacing.md,
+            backgroundColor: colors.surface,
+            borderRadius: borderRadius.lg,
+            borderWidth: 1,
+            borderColor: colors.border,
+            overflow: 'hidden',
+            marginHorizontal: spacing.lg,
+        },
+        moduleHeader: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: spacing.md,
+            backgroundColor: colors.surfaceAlt,
+        },
+        moduleInfo: {
+            flex: 1,
+        },
+        moduleTitle: {
+            ...textStyles.body,
+            fontWeight: '600',
+            color: colors.text,
+            marginBottom: 4,
+        },
+        moduleMeta: {
+            ...textStyles.caption,
+            color: colors.textSecondary,
+        },
+        lessonsList: {
+            backgroundColor: colors.surface,
+        },
+        lessonItem: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: spacing.md,
+            borderTopWidth: 1,
+            borderTopColor: colors.border,
+        },
+        lessonItemLocked: {
+            opacity: 0.7,
+        },
+        lessonLeft: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            flex: 1,
+        },
+        iconContainer: {
+            marginRight: spacing.md,
+            width: 32,
+            alignItems: 'center',
+        },
+        lessonInfo: {
+            flex: 1,
+        },
+        lessonTitle: {
+            ...textStyles.body,
+            color: colors.text,
+            marginBottom: 2,
+        },
+        lessonMeta: {
+            ...textStyles.caption,
+            color: colors.textSecondary,
+        },
+        actionButton: {
+            padding: spacing.xs,
+        },
+        footer: {
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: colors.surface,
+            padding: spacing.lg,
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            borderTopWidth: 1,
+            borderTopColor: colors.border,
+            ...shadows.large,
+        },
+        price: {
+            ...textStyles.h3,
+            color: colors.text,
+        },
+        originalPrice: {
+            ...textStyles.caption,
+            color: colors.textSecondary,
+            textDecorationLine: 'line-through',
+        },
+        buyButton: {
+            backgroundColor: '#8B4513', // Brown color from image
+            paddingHorizontal: spacing.xl,
+            paddingVertical: spacing.md,
+            borderRadius: borderRadius.full,
+        },
+        buyButtonText: {
+            ...textStyles.button,
+            color: colors.textInverse,
+        },
+    });
 
     const { data, isLoading, error, refetch } = useCourseDetails(courseId);
     const { data: progressData } = useCourseProgress(courseId);
@@ -408,266 +672,3 @@ export const CourseDetailsScreen = () => {
         </SafeAreaView>
     );
 };
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: colors.background,
-    },
-    loadingContainer: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    loadingText: {
-        marginTop: spacing.md,
-        color: colors.textSecondary,
-    },
-    errorContainer: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    errorText: {
-        ...textStyles.h3,
-        color: colors.error,
-        marginBottom: spacing.md,
-    },
-    backText: {
-        ...textStyles.body,
-        color: colors.primary,
-    },
-    // Enrolled Header Styles
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.sm,
-    },
-    backButton: {
-        padding: spacing.sm,
-    },
-    headerActions: {
-        flexDirection: 'row',
-    },
-    headerIcon: {
-        marginLeft: spacing.md,
-        padding: spacing.xs,
-        backgroundColor: '#FFE0D6', // Light orange circle bg
-        borderRadius: borderRadius.full,
-    },
-    enrolledHeader: {
-        marginBottom: spacing.xl,
-        paddingHorizontal: spacing.lg,
-    },
-    // Landing Header Styles (Overlay)
-    headerOverlay: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.sm,
-        position: 'absolute',
-        top: 40,
-        left: 0,
-        right: 0,
-        zIndex: 10,
-    },
-    backButtonOverlay: {
-        padding: spacing.sm,
-        backgroundColor: 'rgba(255,255,255,0.8)',
-        borderRadius: borderRadius.full,
-    },
-    headerIconOverlay: {
-        marginLeft: spacing.md,
-        padding: spacing.sm,
-        backgroundColor: 'rgba(255,255,255,0.8)',
-        borderRadius: borderRadius.full,
-    },
-    content: {
-        flex: 1,
-    },
-    bannerContainer: {
-        height: 250,
-        width: '100%',
-    },
-    bannerImage: {
-        width: '100%',
-        height: '100%',
-        resizeMode: 'cover',
-    },
-    bannerGradient: {
-        width: '100%',
-        height: '100%',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    landingHeader: {
-        padding: spacing.lg,
-        backgroundColor: colors.surface,
-        borderTopLeftRadius: borderRadius.xl,
-        borderTopRightRadius: borderRadius.xl,
-        marginTop: -20,
-    },
-    courseTitle: {
-        ...textStyles.h3,
-        color: colors.text,
-        marginBottom: spacing.xs,
-    },
-    instructorName: {
-        ...textStyles.body,
-        color: colors.textSecondary,
-        marginBottom: spacing.md,
-    },
-    courseDescription: {
-        ...textStyles.body,
-        color: colors.textSecondary,
-        marginBottom: spacing.lg,
-        lineHeight: 22,
-    },
-    metaRow: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: spacing.lg,
-        marginBottom: spacing.lg,
-    },
-    metaItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.xs,
-    },
-    metaText: {
-        ...textStyles.caption,
-        color: colors.textSecondary,
-    },
-    progressSection: {
-        marginBottom: spacing.sm,
-        marginTop: spacing.md,
-    },
-    progressText: {
-        ...textStyles.caption,
-        color: colors.textSecondary,
-        marginBottom: spacing.xs,
-    },
-    progressBarBg: {
-        height: 6,
-        backgroundColor: colors.border,
-        borderRadius: 3,
-    },
-    progressBarFill: {
-        height: '100%',
-        backgroundColor: colors.primary,
-        borderRadius: 3,
-    },
-    sectionTitle: {
-        ...textStyles.h4,
-        paddingHorizontal: spacing.lg,
-        marginBottom: spacing.md,
-        marginTop: spacing.md,
-    },
-    modulesList: {
-        paddingBottom: 100, // Space for footer
-    },
-    moduleCard: {
-        marginBottom: spacing.md,
-        backgroundColor: colors.surface,
-        borderRadius: borderRadius.lg,
-        borderWidth: 1,
-        borderColor: colors.border,
-        overflow: 'hidden',
-        marginHorizontal: spacing.lg,
-    },
-    moduleHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: spacing.md,
-        backgroundColor: colors.surfaceAlt,
-    },
-    moduleInfo: {
-        flex: 1,
-    },
-    moduleTitle: {
-        ...textStyles.body,
-        fontWeight: '600',
-        color: colors.text,
-        marginBottom: 4,
-    },
-    moduleMeta: {
-        ...textStyles.caption,
-        color: colors.textSecondary,
-    },
-    lessonsList: {
-        backgroundColor: colors.surface,
-    },
-    lessonItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: spacing.md,
-        borderTopWidth: 1,
-        borderTopColor: colors.border,
-    },
-    lessonItemLocked: {
-        opacity: 0.7,
-    },
-    lessonLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-    },
-    iconContainer: {
-        marginRight: spacing.md,
-        width: 32,
-        alignItems: 'center',
-    },
-    lessonInfo: {
-        flex: 1,
-    },
-    lessonTitle: {
-        ...textStyles.body,
-        color: colors.text,
-        marginBottom: 2,
-    },
-    lessonMeta: {
-        ...textStyles.caption,
-        color: colors.textSecondary,
-    },
-    actionButton: {
-        padding: spacing.xs,
-    },
-    footer: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        backgroundColor: colors.surface,
-        padding: spacing.lg,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        borderTopWidth: 1,
-        borderTopColor: colors.border,
-        ...shadows.large,
-    },
-    price: {
-        ...textStyles.h3,
-        color: colors.text,
-    },
-    originalPrice: {
-        ...textStyles.caption,
-        color: colors.textSecondary,
-        textDecorationLine: 'line-through',
-    },
-    buyButton: {
-        backgroundColor: '#8B4513', // Brown color from image
-        paddingHorizontal: spacing.xl,
-        paddingVertical: spacing.md,
-        borderRadius: borderRadius.full,
-    },
-    buyButtonText: {
-        ...textStyles.button,
-        color: colors.textInverse,
-    },
-});

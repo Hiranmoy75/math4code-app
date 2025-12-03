@@ -27,7 +27,7 @@ export const useEnrolledCourses = () => {
             return data.map((enrollment: any) => ({
                 ...enrollment.course,
                 is_enrolled: true,
-                progress_percentage: enrollment.progress || 0,
+                progress_percentage: enrollment.progress_percentage || 0,
                 completed_lessons: enrollment.completed_lessons || 0,
             })) as Course[];
         },

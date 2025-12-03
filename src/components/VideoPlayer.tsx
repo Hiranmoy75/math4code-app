@@ -42,6 +42,7 @@ const speedOptions = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const ytQualityOptions = ["auto", "small", "medium", "large", "hd720", "hd1080"];
 
 const isYouTube = (inputUrl: string) => {
+    if (!inputUrl) return null;
     const regExp =
         /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
     const match = inputUrl.match(regExp);
@@ -158,7 +159,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     );
                 }
             } catch (e) {
-                console.warn("YT quality change error", e);
+
             }
         }
         startControlsTimer();
@@ -188,7 +189,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             if (dur && dur > 0) setDuration(dur);
             setIsLoading(false);
         } catch (e) {
-            console.warn("YT ready error", e);
+
             setIsLoading(false);
         }
     }, []);
@@ -305,7 +306,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 await videoRef.current.dismissFullscreenPlayer();
             }
         } catch (e) {
-            console.warn("Fullscreen error", e);
+
         }
     };
 
@@ -322,7 +323,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 setCurrentTime(next);
                 if (dur > 0) setDuration(dur);
             } catch (e) {
-                console.warn("YT seek error", e);
+
             }
         } else if (videoRef.current) {
             try {
@@ -339,7 +340,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 setCurrentTime(next);
                 if (dur > 0) setDuration(dur);
             } catch (e) {
-                console.warn("Native seek error", e);
+
             }
         }
     };

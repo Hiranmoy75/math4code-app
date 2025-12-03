@@ -16,7 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../constants/colors';
+import { useAppTheme } from '../../hooks/useAppTheme';
 import { textStyles } from '../../constants/typography';
 import { spacing, borderRadius } from '../../constants/spacing';
 import { useExam } from '../../hooks/useExam';
@@ -29,6 +29,7 @@ const { width } = Dimensions.get('window');
 export const ExamScreen = () => {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
+    const { colors } = useAppTheme();
     const { examId, attemptId } = route.params;
 
     const {
@@ -106,23 +107,60 @@ export const ExamScreen = () => {
                         .single();
 
                     if (existingAttempt && existingAttempt.status === 'in_progress') {
+
+
                         setCurrentAttempt(existingAttempt);
                         setIsExamStarted(true);
 
                         // Fetch exam duration to calculate remaining time
-                        const { data: examData } = await supabase
+                        const { data: examData, error: examError } = await supabase
                             .from('exams')
                             .select('duration_minutes')
                             .eq('id', examId)
                             .single();
 
-                        if (examData) {
+
+
+                        if (examData && examData.duration_minutes && existingAttempt.started_at) {
                             // Calculate remaining time
                             const startTime = new Date(existingAttempt.started_at).getTime();
-                            const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+                            const currentTime = Date.now();
+                            const elapsedMilliseconds = currentTime - startTime;
+                            const elapsedSeconds = Math.floor(elapsedMilliseconds / 1000);
                             const totalSeconds = examData.duration_minutes * 60;
-                            const remaining = Math.max(0, totalSeconds - elapsedSeconds);
-                            setTimeLeft(remaining);
+                            const remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds);
+
+
+
+
+
+
+
+
+
+
+
+
+                            if (remainingSeconds > 0) {
+                                setTimeLeft(remainingSeconds);
+
+                            } else {
+
+                                setTimeLeft(0);
+                                // Auto-submit if time expired
+                                setTimeout(() => {
+                                    handleSubmitExam(true);
+                                }, 1000);
+                            }
+                        } else {
+                            console.error('Missing exam data or started_at:', {
+                                examData,
+                                started_at: existingAttempt.started_at
+                            });
+                            // Fallback: set to full duration if data is missing
+                            if (examData?.duration_minutes) {
+                                setTimeLeft(examData.duration_minutes * 60);
+                            }
                         }
 
                         // Load existing responses
@@ -299,6 +337,395 @@ export const ExamScreen = () => {
             setCurrentSectionIndex(sectionIndex);
         }
     };
+
+    const styles = StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: colors.background,
+        },
+        loadingContainer: {
+            flex: 1,
+            justifyContent: 'center',
+            alignItems: 'center',
+            backgroundColor: colors.background,
+        },
+        header: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            padding: spacing.md,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+            backgroundColor: colors.surface,
+        },
+        backButton: {
+            padding: spacing.sm,
+        },
+        headerTitle: {
+            ...textStyles.h4,
+            flex: 1,
+            textAlign: 'center',
+            marginRight: 40,
+            color: colors.text,
+        },
+        content: {
+            flex: 1,
+            padding: spacing.lg,
+        },
+        examTitle: {
+            ...textStyles.h2,
+            marginBottom: spacing.md,
+            color: colors.text,
+        },
+        infoRow: {
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            marginBottom: spacing.xl,
+            gap: spacing.lg,
+        },
+        infoItem: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.xs,
+        },
+        infoText: {
+            ...textStyles.body,
+            color: colors.textSecondary,
+        },
+        sectionTitle: {
+            ...textStyles.h4,
+            marginBottom: spacing.sm,
+            color: colors.text,
+        },
+        instructionText: {
+            ...textStyles.body,
+            color: colors.textSecondary,
+            lineHeight: 24,
+        },
+        footer: {
+            padding: spacing.lg,
+            borderTopWidth: 1,
+            borderTopColor: colors.border,
+            backgroundColor: colors.surface,
+        },
+        primaryButton: {
+            backgroundColor: colors.primary,
+            padding: spacing.md,
+            borderRadius: borderRadius.lg,
+            alignItems: 'center',
+        },
+        disabledButton: {
+            backgroundColor: colors.textDisabled,
+        },
+        primaryButtonText: {
+            ...textStyles.button,
+            color: colors.textInverse,
+        },
+        errorBanner: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: colors.errorBg,
+            padding: spacing.md,
+            borderRadius: borderRadius.md,
+            marginBottom: spacing.lg,
+            gap: spacing.sm,
+        },
+        errorBannerText: {
+            ...textStyles.body,
+            color: colors.error,
+            flex: 1,
+        },
+        // Exam Interface Styles
+        examHeader: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: spacing.md,
+            backgroundColor: colors.surface,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+        },
+        timerContainer: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: colors.primary,
+            paddingHorizontal: spacing.md,
+            paddingVertical: spacing.xs,
+            borderRadius: borderRadius.full,
+            gap: spacing.xs,
+        },
+        timerText: {
+            ...textStyles.body,
+            color: colors.textInverse,
+            fontWeight: 'bold',
+        },
+        timerTextWarning: {
+            color: colors.error,
+        },
+        headerRightButtons: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.sm,
+        },
+        pauseButton: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            padding: spacing.sm,
+            gap: spacing.xs,
+        },
+        pauseText: {
+            ...textStyles.button,
+            color: colors.text,
+        },
+        paletteButton: {
+            padding: spacing.sm,
+        },
+        sectionTabsContainer: {
+            backgroundColor: colors.surface,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+        },
+        sectionTabsContent: {
+            paddingHorizontal: spacing.md,
+        },
+        sectionTab: {
+            paddingVertical: spacing.md,
+            paddingHorizontal: spacing.md,
+            borderBottomWidth: 2,
+            borderBottomColor: 'transparent',
+        },
+        sectionTabActive: {
+            borderBottomColor: colors.primary,
+        },
+        sectionTabText: {
+            ...textStyles.button,
+            color: colors.textSecondary,
+        },
+        sectionTabTextActive: {
+            color: colors.primary,
+        },
+        questionContainer: {
+            flex: 1,
+            padding: spacing.lg,
+        },
+        questionHeader: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            marginBottom: spacing.md,
+        },
+        questionNumber: {
+            ...textStyles.h4,
+            color: colors.primary,
+        },
+        marksContainer: {
+            flexDirection: 'row',
+            gap: spacing.sm,
+        },
+        marksText: {
+            ...textStyles.caption,
+            color: colors.success,
+            fontWeight: 'bold',
+        },
+        negativeMarksText: {
+            ...textStyles.caption,
+            color: colors.error,
+        },
+        questionText: {
+            marginBottom: spacing.xl,
+            color: colors.text,
+        },
+        optionsContainer: {
+            gap: spacing.md,
+            paddingBottom: spacing.xxl,
+        },
+        optionButton: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            padding: spacing.md,
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: borderRadius.md,
+            backgroundColor: colors.surface,
+        },
+        optionSelected: {
+            borderColor: colors.primary,
+            backgroundColor: colors.primaryLight + '20', // 20% opacity
+        },
+        radioCircle: {
+            width: 20,
+            height: 20,
+            borderRadius: 10,
+            borderWidth: 2,
+            borderColor: colors.textSecondary,
+            marginRight: spacing.md,
+        },
+        radioSelected: {
+            borderColor: colors.primary,
+            backgroundColor: colors.primary,
+        },
+        checkbox: {
+            width: 20,
+            height: 20,
+            borderRadius: 4,
+            borderWidth: 2,
+            borderColor: colors.textSecondary,
+            marginRight: spacing.md,
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        checkboxSelected: {
+            borderColor: colors.primary,
+            backgroundColor: colors.primary,
+        },
+        optionText: {
+            ...textStyles.body,
+            flex: 1,
+            color: colors.text,
+        },
+        optionTextSelected: {
+            color: colors.primary,
+            fontWeight: 'bold',
+        },
+        natInput: {
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: borderRadius.md,
+            padding: spacing.md,
+            fontSize: 16,
+            backgroundColor: colors.surface,
+            color: colors.text,
+        },
+        examFooter: {
+            padding: spacing.md,
+            backgroundColor: colors.surface,
+            borderTopWidth: 1,
+            borderTopColor: colors.border,
+        },
+        navRow: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+        },
+        navButton: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            padding: spacing.sm,
+            gap: spacing.xs,
+        },
+        navButtonDisabled: {
+            opacity: 0.5,
+        },
+        navText: {
+            ...textStyles.button,
+            color: colors.text,
+        },
+        navTextDisabled: {
+            color: colors.textDisabled,
+        },
+        reviewButton: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.xs,
+        },
+        reviewText: {
+            ...textStyles.caption,
+            color: colors.textSecondary,
+        },
+        submitButton: {
+            backgroundColor: colors.success,
+            paddingHorizontal: spacing.lg,
+            paddingVertical: spacing.sm,
+            borderRadius: borderRadius.md,
+        },
+        submitButtonText: {
+            ...textStyles.button,
+            color: colors.textInverse,
+        },
+        // Palette Modal
+        modalOverlay: {
+            flex: 1,
+            backgroundColor: colors.overlay,
+            justifyContent: 'flex-end',
+        },
+        paletteContainer: {
+            backgroundColor: colors.background,
+            borderTopLeftRadius: borderRadius.xl,
+            borderTopRightRadius: borderRadius.xl,
+            height: '70%',
+        },
+        paletteHeader: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: spacing.lg,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+        },
+        paletteTitle: {
+            ...textStyles.h4,
+            color: colors.text,
+        },
+        paletteContent: {
+            padding: spacing.lg,
+        },
+        paletteGrid: {
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: spacing.md,
+        },
+        paletteItem: {
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 1,
+        },
+        paletteItemActive: {
+            borderColor: colors.primary,
+            borderWidth: 2,
+        },
+        paletteItemNotVisited: {
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+        },
+        paletteItemVisited: {
+            borderColor: colors.warning,
+            backgroundColor: colors.warningBg,
+        },
+        paletteItemAnswered: {
+            borderColor: colors.success,
+            backgroundColor: colors.success,
+        },
+        paletteItemMarked: {
+            borderColor: colors.primary,
+            backgroundColor: colors.primary,
+        },
+        paletteItemText: {
+            ...textStyles.caption,
+            color: colors.text,
+        },
+        paletteItemTextLight: {
+            color: colors.textInverse,
+        },
+        legendContainer: {
+            marginTop: spacing.xl,
+            gap: spacing.sm,
+        },
+        legendItem: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.md,
+        },
+        legendBox: {
+            width: 24,
+            height: 24,
+            borderRadius: 4,
+        },
+        legendText: {
+            ...textStyles.caption,
+            color: colors.textSecondary,
+        },
+    });
 
     // Render Logic
     if (isLoading || checkingEligibility || !exam) {
@@ -485,6 +912,7 @@ export const ExamScreen = () => {
                         <TextInput
                             style={styles.natInput}
                             placeholder="Enter your numerical answer"
+                            placeholderTextColor={colors.textSecondary}
                             keyboardType="numeric"
                             value={responses[currentQuestion.id] || ''}
                             onChangeText={(text) => handleAnswerChange(currentQuestion.id, text)}
@@ -642,383 +1070,3 @@ export const ExamScreen = () => {
         </SafeAreaView>
     );
 };
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: colors.background,
-    },
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    backButton: {
-        padding: spacing.sm,
-    },
-    headerTitle: {
-        ...textStyles.h4,
-        flex: 1,
-        textAlign: 'center',
-        marginRight: 40,
-    },
-    content: {
-        flex: 1,
-        padding: spacing.lg,
-    },
-    examTitle: {
-        ...textStyles.h2,
-        marginBottom: spacing.md,
-    },
-    infoRow: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        marginBottom: spacing.xl,
-        gap: spacing.lg,
-    },
-    infoItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.xs,
-    },
-    infoText: {
-        ...textStyles.body,
-        color: colors.textSecondary,
-    },
-    sectionTitle: {
-        ...textStyles.h4,
-        marginBottom: spacing.sm,
-    },
-    instructionText: {
-        ...textStyles.body,
-        color: colors.textSecondary,
-        lineHeight: 24,
-    },
-    footer: {
-        padding: spacing.lg,
-        borderTopWidth: 1,
-        borderTopColor: colors.border,
-    },
-    primaryButton: {
-        backgroundColor: colors.primary,
-        padding: spacing.md,
-        borderRadius: borderRadius.lg,
-        alignItems: 'center',
-    },
-    disabledButton: {
-        backgroundColor: colors.textDisabled,
-    },
-    primaryButtonText: {
-        ...textStyles.button,
-        color: colors.textInverse,
-    },
-    errorBanner: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFEBEE',
-        padding: spacing.md,
-        borderRadius: borderRadius.md,
-        marginBottom: spacing.lg,
-        gap: spacing.sm,
-    },
-    errorBannerText: {
-        ...textStyles.body,
-        color: colors.error,
-        flex: 1,
-    },
-    // Exam Interface Styles
-    examHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: spacing.md,
-        backgroundColor: colors.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    timerContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: colors.primary,
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.xs,
-        borderRadius: borderRadius.full,
-        gap: spacing.xs,
-    },
-    timerText: {
-        ...textStyles.body,
-        color: colors.textInverse,
-        fontWeight: 'bold',
-    },
-    timerTextWarning: {
-        color: colors.error,
-    },
-    headerRightButtons: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.sm,
-    },
-    pauseButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: spacing.sm,
-        gap: spacing.xs,
-    },
-    pauseText: {
-        ...textStyles.button,
-        color: colors.text,
-    },
-    paletteButton: {
-        padding: spacing.sm,
-    },
-    sectionTabsContainer: {
-        backgroundColor: colors.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    sectionTabsContent: {
-        paddingHorizontal: spacing.md,
-    },
-    sectionTab: {
-        paddingVertical: spacing.md,
-        paddingHorizontal: spacing.md,
-        borderBottomWidth: 2,
-        borderBottomColor: 'transparent',
-    },
-    sectionTabActive: {
-        borderBottomColor: colors.primary,
-    },
-    sectionTabText: {
-        ...textStyles.button,
-        color: colors.textSecondary,
-    },
-    sectionTabTextActive: {
-        color: colors.primary,
-    },
-    questionContainer: {
-        flex: 1,
-        padding: spacing.lg,
-    },
-    questionHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: spacing.md,
-    },
-    questionNumber: {
-        ...textStyles.h4,
-        color: colors.primary,
-    },
-    marksContainer: {
-        flexDirection: 'row',
-        gap: spacing.sm,
-    },
-    marksText: {
-        ...textStyles.caption,
-        color: colors.success,
-        fontWeight: 'bold',
-    },
-    negativeMarksText: {
-        ...textStyles.caption,
-        color: colors.error,
-    },
-    questionText: {
-        marginBottom: spacing.xl,
-    },
-    optionsContainer: {
-        gap: spacing.md,
-        paddingBottom: spacing.xxl,
-    },
-    optionButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: spacing.md,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: borderRadius.md,
-        backgroundColor: colors.surface,
-    },
-    optionSelected: {
-        borderColor: colors.primary,
-        backgroundColor: '#F0F7FF',
-    },
-    radioCircle: {
-        width: 20,
-        height: 20,
-        borderRadius: 10,
-        borderWidth: 2,
-        borderColor: colors.textSecondary,
-        marginRight: spacing.md,
-    },
-    radioSelected: {
-        borderColor: colors.primary,
-        backgroundColor: colors.primary,
-    },
-    checkbox: {
-        width: 20,
-        height: 20,
-        borderRadius: 4,
-        borderWidth: 2,
-        borderColor: colors.textSecondary,
-        marginRight: spacing.md,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    checkboxSelected: {
-        borderColor: colors.primary,
-        backgroundColor: colors.primary,
-    },
-    optionText: {
-        ...textStyles.body,
-        flex: 1,
-    },
-    optionTextSelected: {
-        color: colors.primary,
-        fontWeight: 'bold',
-    },
-    natInput: {
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: borderRadius.md,
-        padding: spacing.md,
-        fontSize: 16,
-        backgroundColor: colors.surface,
-    },
-    examFooter: {
-        padding: spacing.md,
-        backgroundColor: colors.surface,
-        borderTopWidth: 1,
-        borderTopColor: colors.border,
-    },
-    navRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    navButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: spacing.sm,
-        gap: spacing.xs,
-    },
-    navButtonDisabled: {
-        opacity: 0.5,
-    },
-    navText: {
-        ...textStyles.button,
-        color: colors.text,
-    },
-    navTextDisabled: {
-        color: colors.textDisabled,
-    },
-    reviewButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.xs,
-    },
-    reviewText: {
-        ...textStyles.caption,
-        color: colors.textSecondary,
-    },
-    submitButton: {
-        backgroundColor: colors.success,
-        paddingHorizontal: spacing.lg,
-        paddingVertical: spacing.sm,
-        borderRadius: borderRadius.md,
-    },
-    submitButtonText: {
-        ...textStyles.button,
-        color: colors.textInverse,
-    },
-    // Palette Modal
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'flex-end',
-    },
-    paletteContainer: {
-        backgroundColor: colors.background,
-        borderTopLeftRadius: borderRadius.xl,
-        borderTopRightRadius: borderRadius.xl,
-        height: '70%',
-    },
-    paletteHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: spacing.lg,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    paletteTitle: {
-        ...textStyles.h4,
-        color: colors.text,
-    },
-    paletteContent: {
-        padding: spacing.lg,
-    },
-    paletteGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: spacing.md,
-    },
-    paletteItem: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-    },
-    paletteItemActive: {
-        borderColor: colors.primary,
-        borderWidth: 2,
-    },
-    paletteItemNotVisited: {
-        borderColor: colors.border,
-        backgroundColor: colors.surface,
-    },
-    paletteItemVisited: {
-        borderColor: colors.warning,
-        backgroundColor: '#FFF3E0',
-    },
-    paletteItemAnswered: {
-        borderColor: colors.success,
-        backgroundColor: colors.success,
-    },
-    paletteItemMarked: {
-        borderColor: colors.primary,
-        backgroundColor: colors.primary,
-    },
-    paletteItemText: {
-        ...textStyles.caption,
-        color: colors.text,
-    },
-    paletteItemTextLight: {
-        color: colors.textInverse,
-    },
-    legendContainer: {
-        marginTop: spacing.xl,
-        gap: spacing.sm,
-    },
-    legendItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.md,
-    },
-    legendBox: {
-        width: 24,
-        height: 24,
-        borderRadius: 4,
-    },
-    legendText: {
-        ...textStyles.caption,
-        color: colors.textSecondary,
-    },
-});

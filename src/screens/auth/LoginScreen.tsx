@@ -46,7 +46,7 @@ export const LoginScreen = () => {
                 Alert.alert('Login Failed', error.message);
             } else if (data.user) {
                 // Navigation will be handled by auth state change
-                console.log('Login successful');
+
             }
         } catch (error: any) {
             Alert.alert('Error', error.message || 'An error occurred');

@@ -51,7 +51,7 @@ export const useCourseProgress = (courseId: string) => {
                 .eq('completed', true);
 
             if (progressError) {
-                console.warn('Error fetching lesson_progress (table might be missing):', progressError);
+
                 // Return empty progress on error to prevent UI crash
                 return {
                     totalLessons,

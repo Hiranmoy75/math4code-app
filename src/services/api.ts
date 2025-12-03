@@ -40,8 +40,15 @@ export const api = {
                 }),
             });
 
-            const data = await response.json();
-            console.log('Buy Course Response:', { status: response.status, data });
+            const text = await response.text();
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
+                console.error('Failed to parse JSON response:', text.substring(0, 200));
+                throw new Error(`Invalid server response: ${text.substring(0, 100)}...`);
+            }
+
 
             if (!response.ok) {
                 console.error('Buy Course Failed:', data);
@@ -72,7 +79,14 @@ export const api = {
                 body: JSON.stringify({ transactionId }),
             });
 
-            const data = await response.json();
+            const text = await response.text();
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
+                console.error('Failed to parse JSON response:', text.substring(0, 200));
+                throw new Error(`Invalid server response: ${text.substring(0, 100)}...`);
+            }
 
             if (!response.ok) {
                 throw new Error(data.error || 'Failed to check payment status');
@@ -129,7 +143,14 @@ export const api = {
                 body: JSON.stringify({ transactionId, courseId }),
             });
 
-            const data = await response.json();
+            const text = await response.text();
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
+                console.error('Failed to parse JSON response:', text.substring(0, 200));
+                throw new Error(`Invalid server response: ${text.substring(0, 100)}...`);
+            }
 
             if (!response.ok) {
                 throw new Error(data.error || 'Payment verification failed');

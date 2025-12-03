@@ -1,17 +1,20 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { Platform } from 'react-native';
 import { StudentTabParamList } from '../types';
-import { colors } from '../constants/colors';
 import { DashboardScreen } from '../screens/student/DashboardScreen';
 import { CoursesScreen } from '../screens/student/CoursesScreen';
-import { ExamsScreen } from '../screens/student/ExamsScreen';
+
 import { LibraryScreen } from '../screens/student/LibraryScreen';
 import { ProfileScreen } from '../screens/student/ProfileScreen';
+import { useAppTheme } from '../hooks/useAppTheme';
 
 const Tab = createBottomTabNavigator<StudentTabParamList>();
 
 export const StudentNavigator = () => {
+    const { colors } = useAppTheme();
+
     return (
         <Tab.Navigator
             screenOptions={{
@@ -19,16 +22,24 @@ export const StudentNavigator = () => {
                 tabBarActiveTintColor: colors.primary,
                 tabBarInactiveTintColor: colors.textSecondary,
                 tabBarStyle: {
-                    height: 60,
-                    paddingBottom: 8,
-                    paddingTop: 8,
+                    height: Platform.OS === 'ios' ? 90 : 70,
+                    paddingBottom: Platform.OS === 'ios' ? 28 : 10,
+                    paddingTop: 5,
                     borderTopWidth: 1,
                     borderTopColor: colors.border,
                     backgroundColor: colors.surface,
+                    elevation: 8,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: -2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
                 },
                 tabBarLabelStyle: {
                     fontSize: 12,
                     fontWeight: '600',
+                },
+                tabBarIconStyle: {
+                    marginBottom: -3,
                 },
             }}
         >
@@ -37,8 +48,12 @@ export const StudentNavigator = () => {
                 component={DashboardScreen}
                 options={{
                     tabBarLabel: 'Home',
-                    tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="home" size={size} color={color} />
+                    tabBarIcon: ({ color, size, focused }) => (
+                        <Ionicons
+                            name={focused ? "home" : "home-outline"}
+                            size={24}
+                            color={color}
+                        />
                     ),
                 }}
             />
@@ -47,8 +62,12 @@ export const StudentNavigator = () => {
                 component={LibraryScreen}
                 options={{
                     tabBarLabel: 'Library',
-                    tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="library" size={size} color={color} />
+                    tabBarIcon: ({ color, size, focused }) => (
+                        <Ionicons
+                            name={focused ? "book" : "book-outline"}
+                            size={24}
+                            color={color}
+                        />
                     ),
                 }}
             />
@@ -56,19 +75,13 @@ export const StudentNavigator = () => {
                 name="CoursesTab"
                 component={CoursesScreen}
                 options={{
-                    tabBarLabel: 'Courses',
-                    tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="search" size={size} color={color} />
-                    ),
-                }}
-            />
-            <Tab.Screen
-                name="ExamsTab"
-                component={ExamsScreen}
-                options={{
-                    tabBarLabel: 'Exams',
-                    tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="document-text" size={size} color={color} />
+                    tabBarLabel: 'Community',
+                    tabBarIcon: ({ color, size, focused }) => (
+                        <Ionicons
+                            name={focused ? "people" : "people-outline"}
+                            size={24}
+                            color={color}
+                        />
                     ),
                 }}
             />
@@ -76,9 +89,13 @@ export const StudentNavigator = () => {
                 name="ProfileTab"
                 component={ProfileScreen}
                 options={{
-                    tabBarLabel: 'Profile',
-                    tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="person" size={size} color={color} />
+                    tabBarLabel: 'Account',
+                    tabBarIcon: ({ color, size, focused }) => (
+                        <Ionicons
+                            name={focused ? "person" : "person-outline"}
+                            size={24}
+                            color={color}
+                        />
                     ),
                 }}
             />

@@ -13,13 +13,14 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useEnrolledCourses } from '../../hooks/useEnrolledCourses';
 import { useCourses } from '../../hooks/useCourses';
 import { useCategories } from '../../hooks/useCategories';
-import { colors, shadows } from '../../constants/colors';
+import { useNotifications } from '../../hooks/useNotifications';
+import { useAppTheme } from '../../hooks/useAppTheme';
 import { textStyles } from '../../constants/typography';
 import { spacing, borderRadius } from '../../constants/spacing';
 import { Course } from '../../types';
@@ -29,11 +30,13 @@ const { width } = Dimensions.get('window');
 export const DashboardScreen = () => {
     const navigation = useNavigation<any>();
     const { data: user } = useCurrentUser();
+    const { colors, shadows } = useAppTheme();
     const { data: enrolledCourses, isLoading: loadingEnrolled, refetch: refetchEnrolled } = useEnrolledCourses();
     const { data: popularCourses, isLoading: loadingPopular, refetch: refetchPopular } = useCourses('popular');
     const { data: newCourses, isLoading: loadingNew, refetch: refetchNew } = useCourses('new');
     const { data: allCourses, isLoading: loadingAll, refetch: refetchAll } = useCourses('all', 3);
     const { data: categories, isLoading: loadingCategories } = useCategories();
+    const { unreadCount, refetch: refetchNotifications } = useNotifications();
 
     const [refreshing, setRefreshing] = useState(false);
 
@@ -44,9 +47,19 @@ export const DashboardScreen = () => {
             refetchPopular(),
             refetchNew(),
             refetchAll(),
+            refetchNotifications(),
         ]);
         setRefreshing(false);
     };
+
+    // Auto-refresh when screen comes into focus
+    useFocusEffect(
+        React.useCallback(() => {
+
+            refetchEnrolled();
+            refetchNotifications();
+        }, [refetchEnrolled, refetchNotifications])
+    );
 
     const renderCourseCard = ({ item, style }: { item: Course; style?: any }) => (
         <TouchableOpacity
@@ -108,27 +121,338 @@ export const DashboardScreen = () => {
         </TouchableOpacity>
     );
 
+
+    const styles = StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: colors.background,
+        },
+        stickyHeader: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: spacing.lg,
+            paddingVertical: spacing.md,
+            backgroundColor: colors.background,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+        },
+        profileImageButton: {
+            position: 'relative',
+        },
+        profileImage: {
+            width: 48,
+            height: 48,
+            borderRadius: 24,
+        },
+        profileImagePlaceholder: {
+            width: 48,
+            height: 48,
+            borderRadius: 24,
+            backgroundColor: colors.primary,
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        profileImageText: {
+            ...textStyles.h3,
+            color: colors.textInverse,
+        },
+        menuIcon: {
+            position: 'absolute',
+            bottom: -2,
+            right: -2,
+            backgroundColor: colors.background,
+            borderRadius: 10,
+            padding: 2,
+            borderWidth: 1,
+            borderColor: colors.border,
+        },
+        headerIcons: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.md,
+        },
+        iconButton: {
+            position: 'relative',
+            padding: spacing.xs,
+        },
+        notificationBadge: {
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            backgroundColor: colors.error,
+            borderRadius: 10,
+            minWidth: 20,
+            height: 20,
+            justifyContent: 'center',
+            alignItems: 'center',
+            paddingHorizontal: 4,
+        },
+        notificationBadgeText: {
+            color: colors.textInverse,
+            fontSize: 10,
+            fontWeight: 'bold',
+        },
+        welcomeSection: {
+            paddingHorizontal: spacing.lg,
+            paddingTop: spacing.xl,
+            paddingBottom: spacing.md,
+        },
+        welcomeText: {
+            ...textStyles.h2,
+            color: colors.text,
+            fontWeight: '700',
+        },
+        userName: {
+            ...textStyles.h2,
+            color: colors.text,
+            fontWeight: '700',
+        },
+        section: {
+            marginTop: spacing.xl,
+        },
+        sectionHeader: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            paddingHorizontal: spacing.lg,
+            marginBottom: spacing.md,
+        },
+        sectionTitle: {
+            ...textStyles.h3,
+            color: colors.text,
+            paddingHorizontal: spacing.lg,
+        },
+        seeAll: {
+            ...textStyles.bodySmall,
+            color: colors.primary,
+            fontWeight: '600',
+        },
+        horizontalList: {
+            paddingHorizontal: spacing.lg,
+            paddingBottom: spacing.md,
+        },
+        categoriesList: {
+            paddingHorizontal: spacing.lg,
+            paddingBottom: spacing.sm,
+        },
+        categoryChip: {
+            paddingHorizontal: spacing.lg,
+            paddingVertical: spacing.sm,
+            backgroundColor: colors.surface,
+            borderRadius: borderRadius.full,
+            marginRight: spacing.sm,
+            borderWidth: 1,
+            borderColor: colors.border,
+        },
+        activeCategory: {
+            backgroundColor: colors.primary,
+            borderColor: colors.primary,
+        },
+        categoryText: {
+            ...textStyles.bodySmall,
+            color: colors.text,
+            fontWeight: '500',
+        },
+        activeCategoryText: {
+            color: colors.textInverse,
+        },
+        courseCard: {
+            width: 220,
+            backgroundColor: colors.surface,
+            borderRadius: borderRadius.xl,
+            marginRight: spacing.md,
+            ...shadows.medium,
+            overflow: 'hidden',
+        },
+        courseThumbnail: {
+            height: 120,
+            backgroundColor: colors.background,
+        },
+        thumbnailImage: {
+            width: '100%',
+            height: '100%',
+        },
+        thumbnailGradient: {
+            flex: 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        priceTag: {
+            position: 'absolute',
+            top: spacing.sm,
+            right: spacing.sm,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            paddingHorizontal: spacing.sm,
+            paddingVertical: 4,
+            borderRadius: borderRadius.sm,
+        },
+        priceText: {
+            ...textStyles.caption,
+            color: colors.textInverse,
+            fontWeight: '700',
+        },
+        courseContent: {
+            padding: spacing.md,
+        },
+        courseTitle: {
+            ...textStyles.body,
+            fontWeight: '600',
+            color: colors.text,
+            marginBottom: spacing.xs,
+            height: 44,
+        },
+        courseFooter: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+        },
+        ratingContainer: {
+            flexDirection: 'row',
+            alignItems: 'center',
+        },
+        ratingText: {
+            ...textStyles.caption,
+            color: colors.textSecondary,
+            marginLeft: 4,
+            fontWeight: '600',
+        },
+        lessonsText: {
+            ...textStyles.caption,
+            color: colors.textSecondary,
+        },
+        enrolledCard: {
+            width: 280,
+            flexDirection: 'row',
+            backgroundColor: colors.surface,
+            borderRadius: borderRadius.xl,
+            marginRight: spacing.md,
+            padding: spacing.sm,
+            ...shadows.small,
+            alignItems: 'center',
+        },
+        enrolledThumbnail: {
+            width: 60,
+            height: 60,
+            borderRadius: borderRadius.lg,
+            overflow: 'hidden',
+        },
+        enrolledInfo: {
+            flex: 1,
+            marginLeft: spacing.md,
+        },
+        enrolledTitle: {
+            ...textStyles.bodySmall,
+            fontWeight: '600',
+            color: colors.text,
+            marginBottom: spacing.xs,
+        },
+        progressBar: {
+            height: 4,
+            backgroundColor: colors.border,
+            borderRadius: 2,
+            marginBottom: 4,
+        },
+        progressFill: {
+            height: '100%',
+            backgroundColor: colors.primary,
+            borderRadius: 2,
+        },
+        progressText: {
+            fontSize: 10,
+            color: colors.textSecondary,
+            fontWeight: '500',
+        },
+        verticalCourseCard: {
+            flexDirection: 'row',
+            backgroundColor: colors.surface,
+            borderRadius: borderRadius.xl,
+            marginHorizontal: spacing.lg,
+            marginBottom: spacing.md,
+            padding: spacing.sm,
+            ...shadows.small,
+        },
+        verticalThumbnail: {
+            width: 80,
+            height: 80,
+            borderRadius: borderRadius.lg,
+            overflow: 'hidden',
+        },
+        verticalInfo: {
+            flex: 1,
+            marginLeft: spacing.md,
+            justifyContent: 'center',
+        },
+        verticalTitle: {
+            ...textStyles.body,
+            fontWeight: '600',
+            color: colors.text,
+            marginBottom: 4,
+        },
+        verticalSubtitle: {
+            ...textStyles.caption,
+            color: colors.textSecondary,
+            marginBottom: spacing.xs,
+        },
+        verticalFooter: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+        },
+    });
+
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
+            {/* Sticky Header */}
+            <View style={styles.stickyHeader}>
+                <TouchableOpacity
+                    style={styles.profileImageButton}
+                    onPress={() => navigation.navigate('ProfileTab')}
+                >
+                    {user?.avatar_url ? (
+                        <Image source={{ uri: user.avatar_url }} style={styles.profileImage} />
+                    ) : (
+                        <View style={styles.profileImagePlaceholder}>
+                            <Text style={styles.profileImageText}>{user?.full_name?.[0] || 'S'}</Text>
+                        </View>
+                    )}
+                    <View style={styles.menuIcon}>
+                        <Ionicons name="menu" size={16} color={colors.text} />
+                    </View>
+                </TouchableOpacity>
+
+                <View style={styles.headerIcons}>
+                    {/* Search Icon */}
+                    <TouchableOpacity style={styles.iconButton}>
+                        <Ionicons name="search-outline" size={24} color={colors.text} />
+                    </TouchableOpacity>
+
+                    {/* Notification Button */}
+                    <TouchableOpacity
+                        style={styles.iconButton}
+                        onPress={() => navigation.navigate('Notifications')}
+                    >
+                        <Ionicons name="notifications-outline" size={24} color={colors.text} />
+                        {unreadCount > 0 && (
+                            <View style={styles.notificationBadge}>
+                                <Text style={styles.notificationBadgeText}>
+                                    {unreadCount > 99 ? '99+' : unreadCount}
+                                </Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+                </View>
+            </View>
+
+            {/* Scrollable Content */}
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             >
-                {/* Header */}
-                <View style={styles.header}>
-                    <View>
-                        <Text style={styles.greeting}>Hello,</Text>
-                        <Text style={styles.userName}>{user?.full_name || 'Student'} 👋</Text>
-                    </View>
-                    <TouchableOpacity style={styles.profileButton} onPress={() => navigation.navigate('ProfileTab')}>
-                        {user?.avatar_url ? (
-                            <Image source={{ uri: user.avatar_url }} style={styles.avatar} />
-                        ) : (
-                            <View style={styles.avatarPlaceholder}>
-                                <Text style={styles.avatarText}>{user?.full_name?.[0] || 'S'}</Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
+                {/* Welcome Message */}
+                <View style={styles.welcomeSection}>
+                    <Text style={styles.welcomeText}>Welcome back,</Text>
+                    <Text style={styles.userName}>{user?.full_name || 'Student'}</Text>
                 </View>
 
                 {/* Continue Learning */}
@@ -235,238 +559,4 @@ export const DashboardScreen = () => {
         </SafeAreaView>
     );
 };
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: colors.background,
-    },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: spacing.lg,
-        paddingVertical: spacing.lg,
-    },
-    greeting: {
-        ...textStyles.body,
-        color: colors.textSecondary,
-    },
-    userName: {
-        ...textStyles.h2,
-        color: colors.text,
-    },
-    profileButton: {
-        ...shadows.small,
-    },
-    avatar: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-    },
-    avatarPlaceholder: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: colors.primary,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    avatarText: {
-        ...textStyles.h3,
-        color: colors.textInverse,
-    },
-    section: {
-        marginTop: spacing.xl,
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: spacing.lg,
-        marginBottom: spacing.md,
-    },
-    sectionTitle: {
-        ...textStyles.h3,
-        color: colors.text,
-        paddingHorizontal: spacing.lg,
-    },
-    seeAll: {
-        ...textStyles.bodySmall,
-        color: colors.primary,
-        fontWeight: '600',
-    },
-    horizontalList: {
-        paddingHorizontal: spacing.lg,
-        paddingBottom: spacing.md,
-    },
-    categoriesList: {
-        paddingHorizontal: spacing.lg,
-        paddingBottom: spacing.sm,
-    },
-    categoryChip: {
-        paddingHorizontal: spacing.lg,
-        paddingVertical: spacing.sm,
-        backgroundColor: colors.surface,
-        borderRadius: borderRadius.full,
-        marginRight: spacing.sm,
-        borderWidth: 1,
-        borderColor: colors.border,
-    },
-    activeCategory: {
-        backgroundColor: colors.primary,
-        borderColor: colors.primary,
-    },
-    categoryText: {
-        ...textStyles.bodySmall,
-        color: colors.text,
-        fontWeight: '500',
-    },
-    activeCategoryText: {
-        color: colors.textInverse,
-    },
-    courseCard: {
-        width: 220,
-        backgroundColor: colors.surface,
-        borderRadius: borderRadius.xl,
-        marginRight: spacing.md,
-        ...shadows.medium,
-        overflow: 'hidden',
-    },
-    courseThumbnail: {
-        height: 120,
-        backgroundColor: colors.background,
-    },
-    thumbnailImage: {
-        width: '100%',
-        height: '100%',
-    },
-    thumbnailGradient: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    priceTag: {
-        position: 'absolute',
-        top: spacing.sm,
-        right: spacing.sm,
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        paddingHorizontal: spacing.sm,
-        paddingVertical: 4,
-        borderRadius: borderRadius.sm,
-    },
-    priceText: {
-        ...textStyles.caption,
-        color: colors.textInverse,
-        fontWeight: '700',
-    },
-    courseContent: {
-        padding: spacing.md,
-    },
-    courseTitle: {
-        ...textStyles.body,
-        fontWeight: '600',
-        color: colors.text,
-        marginBottom: spacing.xs,
-        height: 44,
-    },
-    courseFooter: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    ratingContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    ratingText: {
-        ...textStyles.caption,
-        color: colors.textSecondary,
-        marginLeft: 4,
-        fontWeight: '600',
-    },
-    lessonsText: {
-        ...textStyles.caption,
-        color: colors.textSecondary,
-    },
-    enrolledCard: {
-        width: 280,
-        flexDirection: 'row',
-        backgroundColor: colors.surface,
-        borderRadius: borderRadius.xl,
-        marginRight: spacing.md,
-        padding: spacing.sm,
-        ...shadows.small,
-        alignItems: 'center',
-    },
-    enrolledThumbnail: {
-        width: 60,
-        height: 60,
-        borderRadius: borderRadius.lg,
-        overflow: 'hidden',
-    },
-    enrolledInfo: {
-        flex: 1,
-        marginLeft: spacing.md,
-    },
-    enrolledTitle: {
-        ...textStyles.bodySmall,
-        fontWeight: '600',
-        color: colors.text,
-        marginBottom: spacing.xs,
-    },
-    progressBar: {
-        height: 4,
-        backgroundColor: colors.border,
-        borderRadius: 2,
-        marginBottom: 4,
-    },
-    progressFill: {
-        height: '100%',
-        backgroundColor: colors.primary,
-        borderRadius: 2,
-    },
-    progressText: {
-        fontSize: 10,
-        color: colors.textSecondary,
-        fontWeight: '500',
-    },
-    verticalCourseCard: {
-        flexDirection: 'row',
-        backgroundColor: colors.surface,
-        borderRadius: borderRadius.xl,
-        marginHorizontal: spacing.lg,
-        marginBottom: spacing.md,
-        padding: spacing.sm,
-        ...shadows.small,
-    },
-    verticalThumbnail: {
-        width: 80,
-        height: 80,
-        borderRadius: borderRadius.lg,
-        overflow: 'hidden',
-    },
-    verticalInfo: {
-        flex: 1,
-        marginLeft: spacing.md,
-        justifyContent: 'center',
-    },
-    verticalTitle: {
-        ...textStyles.body,
-        fontWeight: '600',
-        color: colors.text,
-        marginBottom: 4,
-    },
-    verticalSubtitle: {
-        ...textStyles.caption,
-        color: colors.textSecondary,
-        marginBottom: spacing.xs,
-    },
-    verticalFooter: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-});
-
 

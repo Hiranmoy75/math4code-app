@@ -49,26 +49,29 @@ export const useCourseDetails = (courseId: string) => {
                 lessons: lessonsData.filter(lesson => lesson.module_id === module.id),
             }));
 
-            // 5. Check Enrollment Status
+            // 5. Check Enrollment Status and Progress
             const { data: { user } } = await supabase.auth.getUser();
             let isEnrolled = false;
+            let enrollmentProgress = 0;
 
             if (user) {
                 const { data: enrollment } = await supabase
                     .from('enrollments')
-                    .select('status')
+                    .select('status, progress_percentage')
                     .eq('user_id', user.id)
                     .eq('course_id', courseId)
                     .eq('status', 'active')
                     .single();
 
                 isEnrolled = !!enrollment;
+                enrollmentProgress = enrollment?.progress_percentage || 0;
             }
 
             return {
                 course: courseData as Course,
                 modules: modulesWithLessons,
                 isEnrolled,
+                enrollmentProgress,
             };
         },
         enabled: !!courseId,

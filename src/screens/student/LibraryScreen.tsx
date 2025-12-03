@@ -12,23 +12,29 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 
 import { useEnrolledCourses } from '../../hooks/useEnrolledCourses';
-import { useTestSeries } from '../../hooks/useTestSeries';
-import { colors, shadows } from '../../constants/colors';
+import { useAppTheme } from '../../hooks/useAppTheme';
 import { textStyles } from '../../constants/typography';
 import { spacing, borderRadius } from '../../constants/spacing';
-import { Course, TestSeries } from '../../types';
+import { Course } from '../../types';
 
 const { width } = Dimensions.get('window');
 
 export const LibraryScreen = () => {
     const navigation = useNavigation<any>();
-    const [activeTab, setActiveTab] = useState<'courses' | 'testSeries'>('courses');
+    const { colors, shadows } = useAppTheme();
 
     const { data: enrolledCourses, isLoading: loadingCourses, refetch: refetchCourses } = useEnrolledCourses();
-    const { data: enrolledTestSeries, isLoading: loadingTests, refetch: refetchTests } = useTestSeries(true);
+
+    // Auto-refresh when screen comes into focus
+    useFocusEffect(
+        React.useCallback(() => {
+
+            refetchCourses();
+        }, [refetchCourses])
+    );
 
     const renderCourseItem = ({ item }: { item: Course }) => (
         <TouchableOpacity
@@ -72,37 +78,128 @@ export const LibraryScreen = () => {
         </TouchableOpacity>
     );
 
-    const renderTestSeriesItem = ({ item }: { item: TestSeries }) => (
-        <TouchableOpacity
-            style={styles.card}
-            activeOpacity={0.9}
-            onPress={() => navigation.navigate('TestSeriesDetails', { seriesId: item.id })}
-        >
-            <View style={styles.cardContentContainer}>
-                <View style={styles.thumbnailContainer}>
-                    <LinearGradient
-                        colors={colors.gradients.warm as any}
-                        style={styles.thumbnailGradient}
-                    >
-                        <Ionicons name="list" size={24} color={colors.textInverse} />
-                    </LinearGradient>
-                </View>
-                <View style={styles.infoContainer}>
-                    <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>
-                    <Text style={styles.instructorName}>{item.total_exams} Tests</Text>
-
-                    <View style={styles.progressContainer}>
-                        <Text style={styles.progressText}>
-                            {item.completedExams || 0}/{item.total_exams} Completed
-                        </Text>
-                    </View>
-                </View>
-                <TouchableOpacity style={styles.moreButton}>
-                    <Ionicons name="ellipsis-vertical" size={20} color={colors.textSecondary} />
-                </TouchableOpacity>
-            </View>
-        </TouchableOpacity>
-    );
+    const styles = StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: colors.background,
+        },
+        header: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            paddingHorizontal: spacing.lg,
+            paddingVertical: spacing.md,
+            backgroundColor: colors.primary,
+        },
+        headerLeft: {
+            flexDirection: 'row',
+            alignItems: 'center',
+        },
+        headerTitle: {
+            ...textStyles.h3,
+            color: colors.textInverse,
+            marginLeft: spacing.sm,
+        },
+        headerRight: {
+            flexDirection: 'row',
+        },
+        headerIcon: {
+            marginLeft: spacing.md,
+        },
+        content: {
+            flex: 1,
+        },
+        listContent: {
+            padding: spacing.md,
+        },
+        card: {
+            backgroundColor: colors.surface,
+            borderRadius: borderRadius.xl,
+            marginBottom: spacing.md,
+            ...shadows.medium,
+        },
+        cardContentContainer: {
+            flexDirection: 'row',
+            padding: spacing.md,
+        },
+        thumbnailContainer: {
+            width: 80,
+            height: 80,
+            borderRadius: borderRadius.lg,
+            overflow: 'hidden',
+        },
+        thumbnail: {
+            width: '100%',
+            height: '100%',
+        },
+        thumbnailGradient: {
+            width: '100%',
+            height: '100%',
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        infoContainer: {
+            flex: 1,
+            marginLeft: spacing.md,
+            justifyContent: 'center',
+        },
+        cardTitle: {
+            ...textStyles.bodyLarge,
+            color: colors.text,
+            fontWeight: '700',
+            marginBottom: spacing.xs,
+        },
+        instructorName: {
+            ...textStyles.caption,
+            color: colors.textSecondary,
+            marginBottom: spacing.sm,
+        },
+        progressContainer: {
+            marginTop: spacing.xs,
+        },
+        progressBarBg: {
+            height: 4,
+            backgroundColor: colors.border,
+            borderRadius: 2,
+            marginBottom: spacing.xs,
+        },
+        progressBarFill: {
+            height: '100%',
+            backgroundColor: colors.primary,
+            borderRadius: 2,
+        },
+        progressText: {
+            ...textStyles.caption,
+            color: colors.textSecondary,
+        },
+        moreButton: {
+            padding: spacing.xs,
+            justifyContent: 'center',
+        },
+        emptyState: {
+            flex: 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingVertical: spacing.xl * 2,
+        },
+        emptyText: {
+            ...textStyles.body,
+            color: colors.textSecondary,
+            marginTop: spacing.md,
+            marginBottom: spacing.lg,
+        },
+        browseButton: {
+            backgroundColor: colors.primary,
+            paddingHorizontal: spacing.lg,
+            paddingVertical: spacing.sm,
+            borderRadius: borderRadius.lg,
+        },
+        browseButtonText: {
+            ...textStyles.body,
+            color: colors.textInverse,
+            fontWeight: '600',
+        },
+    });
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
@@ -110,7 +207,7 @@ export const LibraryScreen = () => {
             <View style={styles.header}>
                 <View style={styles.headerLeft}>
                     <Ionicons name="library" size={24} color={colors.textInverse} />
-                    <Text style={styles.headerTitle}>Library</Text>
+                    <Text style={styles.headerTitle}>My Courses</Text>
                 </View>
                 <View style={styles.headerRight}>
                     <TouchableOpacity style={styles.headerIcon}>
@@ -122,221 +219,31 @@ export const LibraryScreen = () => {
                 </View>
             </View>
 
-            {/* Tabs */}
-            <View style={styles.tabsContainer}>
-                <TouchableOpacity
-                    style={[styles.tab, activeTab === 'courses' && styles.activeTab]}
-                    onPress={() => setActiveTab('courses')}
-                >
-                    <Text style={[styles.tabText, activeTab === 'courses' && styles.activeTabText]}>
-                        Courses
-                    </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.tab, activeTab === 'testSeries' && styles.activeTab]}
-                    onPress={() => setActiveTab('testSeries')}
-                >
-                    <Text style={[styles.tabText, activeTab === 'testSeries' && styles.activeTabText]}>
-                        Test Series
-                    </Text>
-                </TouchableOpacity>
-            </View>
-
             {/* Content */}
             <View style={styles.content}>
-                {activeTab === 'courses' ? (
-                    <FlatList
-                        data={enrolledCourses}
-                        renderItem={renderCourseItem}
-                        keyExtractor={(item) => item.id}
-                        contentContainerStyle={styles.listContent}
-                        showsVerticalScrollIndicator={false}
-                        refreshControl={
-                            <RefreshControl refreshing={loadingCourses} onRefresh={refetchCourses} />
-                        }
-                        ListEmptyComponent={
-                            <View style={styles.emptyState}>
-                                <Ionicons name="book-outline" size={64} color={colors.textSecondary} />
-                                <Text style={styles.emptyText}>No courses enrolled yet</Text>
-                                <TouchableOpacity
-                                    style={styles.browseButton}
-                                    onPress={() => navigation.navigate('CoursesTab')}
-                                >
-                                    <Text style={styles.browseButtonText}>Browse Courses</Text>
-                                </TouchableOpacity>
-                            </View>
-                        }
-                    />
-                ) : (
-                    <FlatList
-                        data={enrolledTestSeries}
-                        renderItem={renderTestSeriesItem}
-                        keyExtractor={(item) => item.id}
-                        contentContainerStyle={styles.listContent}
-                        showsVerticalScrollIndicator={false}
-                        refreshControl={
-                            <RefreshControl refreshing={loadingTests} onRefresh={refetchTests} />
-                        }
-                        ListEmptyComponent={
-                            <View style={styles.emptyState}>
-                                <Ionicons name="list-outline" size={64} color={colors.textSecondary} />
-                                <Text style={styles.emptyText}>No test series enrolled yet</Text>
-                                <TouchableOpacity
-                                    style={styles.browseButton}
-                                    onPress={() => navigation.navigate('ExamsTab')}
-                                >
-                                    <Text style={styles.browseButtonText}>Browse Test Series</Text>
-                                </TouchableOpacity>
-                            </View>
-                        }
-                    />
-                )}
+                <FlatList
+                    data={enrolledCourses}
+                    renderItem={renderCourseItem}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={styles.listContent}
+                    showsVerticalScrollIndicator={false}
+                    refreshControl={
+                        <RefreshControl refreshing={loadingCourses} onRefresh={refetchCourses} />
+                    }
+                    ListEmptyComponent={
+                        <View style={styles.emptyState}>
+                            <Ionicons name="book-outline" size={64} color={colors.textSecondary} />
+                            <Text style={styles.emptyText}>No courses enrolled yet</Text>
+                            <TouchableOpacity
+                                style={styles.browseButton}
+                                onPress={() => navigation.navigate('CoursesTab')}
+                            >
+                                <Text style={styles.browseButtonText}>Browse Courses</Text>
+                            </TouchableOpacity>
+                        </View>
+                    }
+                />
             </View>
         </SafeAreaView>
     );
 };
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: colors.background,
-    },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: spacing.lg,
-        paddingVertical: spacing.md,
-        backgroundColor: colors.primary,
-    },
-    headerLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    headerTitle: {
-        ...textStyles.h3,
-        color: colors.textInverse,
-        marginLeft: spacing.sm,
-    },
-    headerRight: {
-        flexDirection: 'row',
-    },
-    headerIcon: {
-        marginLeft: spacing.lg,
-    },
-    tabsContainer: {
-        flexDirection: 'row',
-        backgroundColor: colors.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    tab: {
-        flex: 1,
-        paddingVertical: spacing.md,
-        alignItems: 'center',
-        borderBottomWidth: 2,
-        borderBottomColor: 'transparent',
-    },
-    activeTab: {
-        borderBottomColor: colors.primary,
-    },
-    tabText: {
-        ...textStyles.body,
-        color: colors.textSecondary,
-        fontWeight: '600',
-    },
-    activeTabText: {
-        color: colors.primary,
-    },
-    content: {
-        flex: 1,
-        backgroundColor: colors.background,
-    },
-    listContent: {
-        padding: spacing.md,
-    },
-    card: {
-        backgroundColor: colors.surface,
-        borderRadius: borderRadius.lg,
-        marginBottom: spacing.md,
-        ...shadows.small,
-        overflow: 'hidden',
-    },
-    cardContentContainer: {
-        flexDirection: 'row',
-        padding: spacing.md,
-    },
-    thumbnailContainer: {
-        width: 100,
-        height: 70,
-        borderRadius: borderRadius.md,
-        overflow: 'hidden',
-        marginRight: spacing.md,
-    },
-    thumbnail: {
-        width: '100%',
-        height: '100%',
-    },
-    thumbnailGradient: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    infoContainer: {
-        flex: 1,
-        justifyContent: 'space-between',
-    },
-    cardTitle: {
-        ...textStyles.body,
-        fontWeight: '600',
-        color: colors.text,
-        marginBottom: 4,
-    },
-    instructorName: {
-        ...textStyles.caption,
-        color: colors.textSecondary,
-        marginBottom: 8,
-    },
-    progressContainer: {
-        marginTop: 'auto',
-    },
-    progressBarBg: {
-        height: 4,
-        backgroundColor: colors.border,
-        borderRadius: 2,
-        marginBottom: 4,
-    },
-    progressBarFill: {
-        height: '100%',
-        backgroundColor: colors.primary,
-        borderRadius: 2,
-    },
-    progressText: {
-        fontSize: 10,
-        color: colors.textSecondary,
-    },
-    moreButton: {
-        padding: spacing.xs,
-    },
-    emptyState: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: spacing['3xl'],
-    },
-    emptyText: {
-        ...textStyles.body,
-        color: colors.textSecondary,
-        marginTop: spacing.md,
-        marginBottom: spacing.lg,
-    },
-    browseButton: {
-        paddingHorizontal: spacing.xl,
-        paddingVertical: spacing.md,
-        backgroundColor: colors.primary,
-        borderRadius: borderRadius.full,
-    },
-    browseButtonText: {
-        ...textStyles.button,
-        color: colors.textInverse,
-    },
-});

@@ -67,6 +67,7 @@ export interface Exam {
     result_visibility?: 'immediate' | 'manual' | 'scheduled';
     result_release_time?: string;
     show_answers?: boolean;
+    show_results_immediately?: boolean;
 }
 
 export interface Section {
@@ -126,19 +127,7 @@ export interface Result {
     rank?: number;
 }
 
-export interface TestSeries {
-    id: string;
-    title: string;
-    description?: string;
-    price: number;
-    is_free: boolean;
-    total_exams: number;
-    status: 'draft' | 'published' | 'archived';
-    completedExams?: number;
-    progress?: number;
-    nextExamName?: string;
-    nextExamDate?: string;
-}
+
 
 export interface RewardStatus {
     user_id: string;
@@ -199,6 +188,7 @@ export type RootStackParamList = {
     QuestionAnalysisScreen: { attemptId: string; examId: string };
     PaymentStatus: { transactionId: string; courseId: string };
     PaymentWebView: { paymentUrl: string; transactionId: string; courseId: string };
+    AIChat: undefined;
 };
 
 export type AuthStackParamList = {
@@ -211,7 +201,7 @@ export type StudentTabParamList = {
     HomeTab: undefined;
     LibraryTab: undefined;
     CoursesTab: undefined;
-    ExamsTab: undefined;
+
     ProfileTab: undefined;
 };
 
@@ -226,12 +216,7 @@ export type CoursesStackParamList = {
     CourseDetails: { courseId: string };
 };
 
-export type ExamsStackParamList = {
-    TestSeriesList: undefined;
-    TestSeriesDetails: { seriesId: string };
-    ExamScreen: { examId: string; attemptId: string };
-    ResultScreen: { attemptId: string };
-};
+
 
 export type RewardsStackParamList = {
     RewardsHub: undefined;

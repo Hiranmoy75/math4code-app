@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../constants/colors';
+import { useAppTheme } from '../../hooks/useAppTheme';
 import { textStyles } from '../../constants/typography';
 import { spacing, borderRadius } from '../../constants/spacing';
 import { useExam } from '../../hooks/useExam';
@@ -18,6 +18,7 @@ import { useExam } from '../../hooks/useExam';
 export const ResultScreen = () => {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
+    const { colors } = useAppTheme();
     const { attemptId, examId } = route.params;
     const { fetchExamResult, exam } = useExam(examId);
     const [result, setResult] = useState<any>(null);
@@ -46,6 +47,195 @@ export const ResultScreen = () => {
         };
         loadResult();
     }, [attemptId]);
+
+    const styles = StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: colors.background,
+        },
+        loadingContainer: {
+            flex: 1,
+            justifyContent: 'center',
+            alignItems: 'center',
+            backgroundColor: colors.background,
+        },
+        loadingText: {
+            ...textStyles.body,
+            marginTop: spacing.md,
+            color: colors.textSecondary,
+        },
+        scrollContent: {
+            padding: spacing.lg,
+        },
+        header: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: spacing.xl,
+        },
+        backButton: {
+            padding: spacing.sm,
+            marginLeft: -spacing.sm, // Align with left edge
+        },
+        headerTitle: {
+            ...textStyles.h3,
+            color: colors.text,
+            textAlign: 'center',
+            flex: 1,
+            marginRight: 32, // Balance the back button width roughly
+        },
+        scoreCard: {
+            alignItems: 'center',
+            padding: spacing.xl,
+            borderRadius: borderRadius.xl,
+            marginBottom: spacing.xl,
+            borderWidth: 1,
+            backgroundColor: colors.surface,
+        },
+        passedCard: {
+            backgroundColor: colors.successBg,
+            borderColor: colors.success,
+        },
+        failedCard: {
+            backgroundColor: colors.errorBg,
+            borderColor: colors.error,
+        },
+        scoreText: {
+            ...textStyles.h2,
+            marginTop: spacing.md,
+            color: colors.text,
+        },
+        percentageText: {
+            ...textStyles.h4,
+            color: colors.textSecondary,
+        },
+        statusText: {
+            ...textStyles.h4,
+            marginTop: spacing.sm,
+            fontWeight: 'bold',
+            color: colors.text,
+        },
+        statsGrid: {
+            flexDirection: 'row',
+            gap: spacing.md,
+            marginBottom: spacing.xl,
+        },
+        statItem: {
+            flex: 1,
+            backgroundColor: colors.surface,
+            padding: spacing.md,
+            borderRadius: borderRadius.lg,
+            alignItems: 'center',
+            elevation: 2,
+            shadowColor: colors.text,
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+        },
+        statLabel: {
+            ...textStyles.caption,
+            color: colors.textSecondary,
+        },
+        statValue: {
+            ...textStyles.h4,
+            color: colors.primary,
+            marginTop: spacing.xs,
+        },
+        sectionHeader: {
+            ...textStyles.h4,
+            marginBottom: spacing.md,
+            color: colors.text,
+        },
+        sectionCard: {
+            backgroundColor: colors.surface,
+            padding: spacing.md,
+            borderRadius: borderRadius.lg,
+            marginBottom: spacing.md,
+            elevation: 1,
+            shadowColor: colors.text,
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.1,
+            shadowRadius: 2,
+        },
+        sectionRow: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            marginBottom: spacing.sm,
+        },
+        sectionTitle: {
+            ...textStyles.body,
+            fontWeight: 'bold',
+            color: colors.text,
+        },
+        sectionScore: {
+            ...textStyles.body,
+            fontWeight: 'bold',
+            color: colors.primary,
+        },
+        sectionStats: {
+            flexDirection: 'row',
+            gap: spacing.md,
+            marginTop: spacing.xs,
+        },
+        statBadge: {
+            ...textStyles.caption,
+            fontWeight: '600',
+        },
+        analysisButton: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: colors.secondary,
+            padding: spacing.md,
+            borderRadius: borderRadius.lg,
+            marginBottom: spacing.md,
+            gap: spacing.sm,
+        },
+        analysisButtonText: {
+            ...textStyles.button,
+            color: colors.textInverse,
+        },
+        mainButton: {
+            paddingHorizontal: spacing.xl,
+            paddingVertical: spacing.md,
+            backgroundColor: colors.primary,
+            borderRadius: borderRadius.lg,
+            alignItems: 'center',
+            marginBottom: spacing.xl,
+        },
+        mainButtonText: {
+            ...textStyles.button,
+            color: colors.textInverse,
+        },
+        errorContainer: {
+            flex: 1,
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: spacing.xl,
+        },
+        errorText: {
+            ...textStyles.h3,
+            color: colors.text,
+            marginTop: spacing.md,
+        },
+        errorSubText: {
+            ...textStyles.body,
+            color: colors.textSecondary,
+            textAlign: 'center',
+            marginTop: spacing.sm,
+            marginBottom: spacing.xl,
+        },
+        homeButton: {
+            paddingHorizontal: spacing.xl,
+            paddingVertical: spacing.md,
+            backgroundColor: colors.primary,
+            borderRadius: borderRadius.lg,
+        },
+        homeButtonText: {
+            ...textStyles.button,
+            color: colors.textInverse,
+        },
+    });
 
     if (loading) {
         return (
@@ -80,7 +270,11 @@ export const ResultScreen = () => {
         <SafeAreaView style={styles.container}>
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 <View style={styles.header}>
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                        <Ionicons name="arrow-back" size={24} color={colors.text} />
+                    </TouchableOpacity>
                     <Text style={styles.headerTitle}>Exam Result</Text>
+                    <View style={{ width: 24 }} /> {/* Spacer for centering */}
                 </View>
 
                 {/* Score Card */}
@@ -137,7 +331,7 @@ export const ResultScreen = () => {
                         style={styles.analysisButton}
                         onPress={() => navigation.navigate('QuestionAnalysisScreen', { attemptId, examId })}
                     >
-                        <Ionicons name="list-outline" size={20} color="#fff" />
+                        <Ionicons name="list-outline" size={20} color={colors.textInverse} />
                         <Text style={styles.analysisButtonText}>View Question Analysis</Text>
                     </TouchableOpacity>
                 )}
@@ -152,141 +346,3 @@ export const ResultScreen = () => {
         </SafeAreaView>
     );
 };
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: colors.background,
-    },
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: colors.background,
-    },
-    loadingText: {
-        ...textStyles.body,
-        marginTop: spacing.md,
-        color: colors.textSecondary,
-    },
-    scrollContent: {
-        padding: spacing.lg,
-    },
-    header: {
-        alignItems: 'center',
-        marginBottom: spacing.xl,
-    },
-    headerTitle: {
-        ...textStyles.h3,
-        color: colors.text,
-    },
-    scoreCard: {
-        alignItems: 'center',
-        padding: spacing.xl,
-        borderRadius: borderRadius.xl,
-        marginBottom: spacing.xl,
-        borderWidth: 1,
-    },
-    passedCard: {
-        backgroundColor: '#E8F5E9',
-        borderColor: colors.success,
-    },
-    failedCard: {
-        backgroundColor: '#FFEBEE',
-        borderColor: colors.error,
-    },
-    scoreText: {
-        ...textStyles.h2,
-        marginTop: spacing.md,
-        color: colors.text,
-    },
-    percentageText: {
-        ...textStyles.h4,
-        color: colors.textSecondary,
-    },
-    statusText: {
-        ...textStyles.h4,
-        marginTop: spacing.sm,
-        fontWeight: 'bold',
-        color: colors.text,
-    },
-    statsGrid: {
-        flexDirection: 'row',
-        gap: spacing.md,
-        marginBottom: spacing.xl,
-    },
-    statItem: {
-        flex: 1,
-        backgroundColor: colors.surface,
-        padding: spacing.md,
-        borderRadius: borderRadius.lg,
-        alignItems: 'center',
-        elevation: 2,
-    },
-    statLabel: {
-        ...textStyles.caption,
-        color: colors.textSecondary,
-    },
-    statValue: {
-        ...textStyles.h4,
-        color: colors.primary,
-        marginTop: spacing.xs,
-    },
-    sectionHeader: {
-        ...textStyles.h4,
-        marginBottom: spacing.md,
-        color: colors.text,
-    },
-    sectionCard: {
-        backgroundColor: colors.surface,
-        padding: spacing.md,
-        borderRadius: borderRadius.lg,
-        marginBottom: spacing.md,
-        elevation: 1,
-    },
-    sectionRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: spacing.sm,
-    },
-    sectionTitle: {
-        ...textStyles.body,
-        fontWeight: 'bold',
-    },
-    sectionScore: {
-        ...textStyles.body,
-        fontWeight: 'bold',
-        color: colors.primary,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: spacing.xl,
-    },
-    errorContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: spacing.xl,
-    },
-    errorText: {
-        ...textStyles.h3,
-        color: colors.text,
-        marginTop: spacing.md,
-    },
-    errorSubText: {
-        ...textStyles.body,
-        color: colors.textSecondary,
-        textAlign: 'center',
-        marginTop: spacing.sm,
-        marginBottom: spacing.xl,
-    },
-    homeButton: {
-        paddingHorizontal: spacing.xl,
-        paddingVertical: spacing.md,
-        backgroundColor: colors.primary,
-        borderRadius: borderRadius.lg,
-    },
-    homeButtonText: {
-        ...textStyles.button,
-        color: colors.textInverse,
-    },
-});
