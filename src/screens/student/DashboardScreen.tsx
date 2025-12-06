@@ -489,7 +489,7 @@ export const DashboardScreen = () => {
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>Popular Courses</Text>
-                        <TouchableOpacity onPress={() => navigation.navigate('CoursesTab')}>
+                        <TouchableOpacity onPress={() => navigation.navigate('AllCourses')}>
                             <Text style={styles.seeAll}>See All</Text>
                         </TouchableOpacity>
                     </View>
@@ -522,7 +522,7 @@ export const DashboardScreen = () => {
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>All Courses</Text>
-                        <TouchableOpacity onPress={() => navigation.navigate('CoursesTab')}>
+                        <TouchableOpacity onPress={() => navigation.navigate('AllCourses')}>
                             <Text style={styles.seeAll}>View All</Text>
                         </TouchableOpacity>
                     </View>

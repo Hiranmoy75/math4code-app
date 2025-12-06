@@ -1,11 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     ScrollView,
     TouchableOpacity,
-    Alert,
     Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,6 +19,7 @@ import { authService } from '../../services/supabase';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { textStyles } from '../../constants/typography';
 import { spacing, borderRadius } from '../../constants/spacing';
+import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 
 export const ProfileScreen = () => {
     const navigation = useNavigation<any>();
@@ -28,22 +28,15 @@ export const ProfileScreen = () => {
     const { data: rewards } = useUserRewards();
     const { data: badges } = useUserBadges();
     const { data: enrolledCourses } = useEnrolledCourses();
+    const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
-    const handleLogout = async () => {
-        Alert.alert(
-            'Logout',
-            'Are you sure you want to logout?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Logout',
-                    style: 'destructive',
-                    onPress: async () => {
-                        await authService.signOut();
-                    },
-                },
-            ]
-        );
+    const handleLogout = () => {
+        setShowLogoutDialog(true);
+    };
+
+    const confirmLogout = async () => {
+        setShowLogoutDialog(false);
+        await authService.signOut();
     };
 
     const getBadgeIcon = (badgeId: string) => {
@@ -64,187 +57,187 @@ export const ProfileScreen = () => {
         return colors.textSecondary;
     };
 
-    
+
     const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: colors.background,
-    },
-    header: {
-        paddingVertical: spacing['3xl'],
-        alignItems: 'center',
-        borderBottomLeftRadius: borderRadius['3xl'],
-        borderBottomRightRadius: borderRadius['3xl'],
-    },
-    avatarContainer: {
-        marginBottom: spacing.base,
-    },
-    avatar: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
-        backgroundColor: colors.surface,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 4,
-        borderColor: colors.textInverse,
-    },
-    avatarText: {
-        ...textStyles.h1,
-        color: colors.primary,
-    },
-    userName: {
-        ...textStyles.h2,
-        color: colors.textInverse,
-        marginBottom: spacing.xs,
-    },
-    userEmail: {
-        ...textStyles.body,
-        color: colors.textInverse,
-        opacity: 0.9,
-        marginBottom: spacing.md,
-    },
-    levelBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.xs,
-        borderRadius: borderRadius.full,
-        gap: spacing.xs,
-    },
-    levelText: {
-        ...textStyles.bodySmall,
-        color: colors.textInverse,
-        fontWeight: '700',
-    },
-    rewardsContainer: {
-        flexDirection: 'row',
-        padding: spacing.md,
-        gap: spacing.sm,
-        marginTop: -spacing['2xl'],
-    },
-    rewardBox: {
-        flex: 1,
-        backgroundColor: colors.surface,
-        borderRadius: borderRadius.xl,
-        padding: spacing.md,
-        alignItems: 'center',
-        ...shadows.medium,
-    },
-    streakBox: {
-        borderWidth: 2,
-        borderColor: colors.warning + '40',
-    },
-    rewardValue: {
-        ...textStyles.h2,
-        color: colors.text,
-        marginTop: spacing.xs,
-        fontWeight: '700',
-    },
-    rewardLabel: {
-        ...textStyles.caption,
-        color: colors.textSecondary,
-        marginTop: 2,
-        fontWeight: '600',
-    },
-    rewardSubtext: {
-        ...textStyles.caption,
-        color: colors.textSecondary,
-        fontSize: 10,
-        marginTop: 2,
-    },
-    section: {
-        padding: spacing.md,
-    },
-    sectionTitle: {
-        ...textStyles.h3,
-        color: colors.text,
-        marginBottom: spacing.md,
-    },
-    statsGrid: {
-        flexDirection: 'row',
-        gap: spacing.sm,
-    },
-    statCard: {
-        flex: 1,
-        backgroundColor: colors.surface,
-        borderRadius: borderRadius.lg,
-        padding: spacing.md,
-        alignItems: 'center',
-        ...shadows.small,
-    },
-    statValue: {
-        ...textStyles.h3,
-        color: colors.text,
-        marginTop: spacing.xs,
-    },
-    statLabel: {
-        ...textStyles.caption,
-        color: colors.textSecondary,
-        marginTop: 4,
-    },
-    badgesContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: spacing.sm,
-    },
-    badgeItem: {
-        width: '30%',
-    },
-    badgeIcon: {
-        width: '100%',
-        aspectRatio: 1,
-        borderRadius: borderRadius.lg,
-        alignItems: 'center',
-        justifyContent: 'center',
-        ...shadows.small,
-    },
-    menuItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: colors.surface,
-        borderRadius: borderRadius.lg,
-        padding: spacing.md,
-        marginBottom: spacing.sm,
-        ...shadows.small,
-    },
-    menuIconContainer: {
-        width: 40,
-        height: 40,
-        borderRadius: borderRadius.md,
-        backgroundColor: colors.primaryLight + '20',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: spacing.md,
-    },
-    menuLabel: {
-        ...textStyles.body,
-        color: colors.text,
-        flex: 1,
-    },
-    logoutButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: colors.errorBg,
-        borderRadius: borderRadius.lg,
-        padding: spacing.md,
-        margin: spacing.md,
-        gap: spacing.sm,
-    },
-    logoutText: {
-        ...textStyles.body,
-        color: colors.error,
-        fontWeight: '600',
-    },
-    version: {
-        ...textStyles.caption,
-        color: colors.textSecondary,
-        textAlign: 'center',
-        marginVertical: spacing.md,
-    },
-});
+        container: {
+            flex: 1,
+            backgroundColor: colors.background,
+        },
+        header: {
+            paddingVertical: spacing['3xl'],
+            alignItems: 'center',
+            borderBottomLeftRadius: borderRadius['3xl'],
+            borderBottomRightRadius: borderRadius['3xl'],
+        },
+        avatarContainer: {
+            marginBottom: spacing.base,
+        },
+        avatar: {
+            width: 100,
+            height: 100,
+            borderRadius: 50,
+            backgroundColor: colors.surface,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 4,
+            borderColor: colors.textInverse,
+        },
+        avatarText: {
+            ...textStyles.h1,
+            color: colors.primary,
+        },
+        userName: {
+            ...textStyles.h2,
+            color: colors.textInverse,
+            marginBottom: spacing.xs,
+        },
+        userEmail: {
+            ...textStyles.body,
+            color: colors.textInverse,
+            opacity: 0.9,
+            marginBottom: spacing.md,
+        },
+        levelBadge: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: 'rgba(255,255,255,0.2)',
+            paddingHorizontal: spacing.md,
+            paddingVertical: spacing.xs,
+            borderRadius: borderRadius.full,
+            gap: spacing.xs,
+        },
+        levelText: {
+            ...textStyles.bodySmall,
+            color: colors.textInverse,
+            fontWeight: '700',
+        },
+        rewardsContainer: {
+            flexDirection: 'row',
+            padding: spacing.md,
+            gap: spacing.sm,
+            marginTop: -spacing['2xl'],
+        },
+        rewardBox: {
+            flex: 1,
+            backgroundColor: colors.surface,
+            borderRadius: borderRadius.xl,
+            padding: spacing.md,
+            alignItems: 'center',
+            ...shadows.medium,
+        },
+        streakBox: {
+            borderWidth: 2,
+            borderColor: colors.warning + '40',
+        },
+        rewardValue: {
+            ...textStyles.h2,
+            color: colors.text,
+            marginTop: spacing.xs,
+            fontWeight: '700',
+        },
+        rewardLabel: {
+            ...textStyles.caption,
+            color: colors.textSecondary,
+            marginTop: 2,
+            fontWeight: '600',
+        },
+        rewardSubtext: {
+            ...textStyles.caption,
+            color: colors.textSecondary,
+            fontSize: 10,
+            marginTop: 2,
+        },
+        section: {
+            padding: spacing.md,
+        },
+        sectionTitle: {
+            ...textStyles.h3,
+            color: colors.text,
+            marginBottom: spacing.md,
+        },
+        statsGrid: {
+            flexDirection: 'row',
+            gap: spacing.sm,
+        },
+        statCard: {
+            flex: 1,
+            backgroundColor: colors.surface,
+            borderRadius: borderRadius.lg,
+            padding: spacing.md,
+            alignItems: 'center',
+            ...shadows.small,
+        },
+        statValue: {
+            ...textStyles.h3,
+            color: colors.text,
+            marginTop: spacing.xs,
+        },
+        statLabel: {
+            ...textStyles.caption,
+            color: colors.textSecondary,
+            marginTop: 4,
+        },
+        badgesContainer: {
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: spacing.sm,
+        },
+        badgeItem: {
+            width: '30%',
+        },
+        badgeIcon: {
+            width: '100%',
+            aspectRatio: 1,
+            borderRadius: borderRadius.lg,
+            alignItems: 'center',
+            justifyContent: 'center',
+            ...shadows.small,
+        },
+        menuItem: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: colors.surface,
+            borderRadius: borderRadius.lg,
+            padding: spacing.md,
+            marginBottom: spacing.sm,
+            ...shadows.small,
+        },
+        menuIconContainer: {
+            width: 40,
+            height: 40,
+            borderRadius: borderRadius.md,
+            backgroundColor: colors.primaryLight + '20',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginRight: spacing.md,
+        },
+        menuLabel: {
+            ...textStyles.body,
+            color: colors.text,
+            flex: 1,
+        },
+        logoutButton: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: colors.errorBg,
+            borderRadius: borderRadius.lg,
+            padding: spacing.md,
+            margin: spacing.md,
+            gap: spacing.sm,
+        },
+        logoutText: {
+            ...textStyles.body,
+            color: colors.error,
+            fontWeight: '600',
+        },
+        version: {
+            ...textStyles.caption,
+            color: colors.textSecondary,
+            textAlign: 'center',
+            marginVertical: spacing.md,
+        },
+    });
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
@@ -415,7 +408,18 @@ export const ProfileScreen = () => {
                 <Text style={styles.version}>Version 1.0.0</Text>
                 <View style={{ height: 20 }} />
             </ScrollView>
+
+            {/* Logout Confirmation Dialog */}
+            <ConfirmDialog
+                visible={showLogoutDialog}
+                title="Logout"
+                message="Are you sure you want to logout? You'll need to sign in again to access your account."
+                confirmText="Logout"
+                cancelText="Cancel"
+                icon="log-out-outline"
+                onConfirm={confirmLogout}
+                onCancel={() => setShowLogoutDialog(false)}
+            />
         </SafeAreaView>
     );
 };
-

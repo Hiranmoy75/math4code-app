@@ -19,6 +19,9 @@ import { EditProfileScreen } from './src/screens/student/EditProfileScreen';
 import { SettingsScreen } from './src/screens/student/SettingsScreen';
 import { HelpSupportScreen } from './src/screens/student/HelpSupportScreen';
 import { AIChatScreen } from './src/screens/student/AIChatScreen';
+import { CoursesScreen } from './src/screens/student/CoursesScreen';
+import { MentionsScreen } from './src/screens/student/MentionsScreen';
+import { BookmarksScreen } from './src/screens/student/BookmarksScreen';
 import { supabase } from './src/services/supabase';
 import { colors } from './src/constants/colors';
 import { RootStackParamList } from './src/types';
@@ -74,6 +77,9 @@ export default function App() {
                 <Stack.Screen name="Settings" component={SettingsScreen} />
                 <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
                 <Stack.Screen name="AIChat" component={AIChatScreen} />
+                <Stack.Screen name="AllCourses" component={CoursesScreen} />
+                <Stack.Screen name="Mentions" component={MentionsScreen} />
+                <Stack.Screen name="Bookmarks" component={BookmarksScreen} />
               </>
             ) : (
               <Stack.Screen name="Auth" component={AuthNavigator} />

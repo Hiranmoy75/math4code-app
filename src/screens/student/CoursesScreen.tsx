@@ -55,10 +55,19 @@ export const CoursesScreen = () => {
             backgroundColor: colors.background,
         },
         header: {
-            paddingHorizontal: spacing.lg,
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: spacing.md,
             paddingTop: spacing.md,
             paddingBottom: spacing.sm,
             backgroundColor: colors.background,
+        },
+        backButton: {
+            padding: spacing.sm,
+            marginRight: spacing.sm,
+        },
+        headerContent: {
+            flex: 1,
         },
         headerTitle: {
             ...textStyles.h2,
@@ -268,21 +277,29 @@ export const CoursesScreen = () => {
         <SafeAreaView style={styles.container} edges={['top']}>
             {/* Header */}
             <View style={styles.header}>
-                <Text style={styles.headerTitle}>Explore Courses</Text>
-                <View style={styles.searchContainer}>
-                    <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
-                    <TextInput
-                        style={styles.searchInput}
-                        placeholder="Search for courses..."
-                        placeholderTextColor={colors.textSecondary}
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                    />
-                    {searchQuery.length > 0 && (
-                        <TouchableOpacity onPress={() => setSearchQuery('')}>
-                            <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
-                        </TouchableOpacity>
-                    )}
+                <TouchableOpacity
+                    style={styles.backButton}
+                    onPress={() => navigation.goBack()}
+                >
+                    <Ionicons name="arrow-back" size={24} color={colors.text} />
+                </TouchableOpacity>
+                <View style={styles.headerContent}>
+                    <Text style={styles.headerTitle}>Explore Courses</Text>
+                    <View style={styles.searchContainer}>
+                        <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
+                        <TextInput
+                            style={styles.searchInput}
+                            placeholder="Search for courses..."
+                            placeholderTextColor={colors.textSecondary}
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                        />
+                        {searchQuery.length > 0 && (
+                            <TouchableOpacity onPress={() => setSearchQuery('')}>
+                                <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+                            </TouchableOpacity>
+                        )}
+                    </View>
                 </View>
             </View>
 

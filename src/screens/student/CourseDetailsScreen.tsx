@@ -479,9 +479,6 @@ export const CourseDetailsScreen = () => {
                         <TouchableOpacity style={styles.headerIcon}>
                             <Ionicons name="create-outline" size={24} color={colors.primary} />
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.headerIcon}>
-                            <Ionicons name="chatbubble-ellipses-outline" size={24} color={colors.primary} />
-                        </TouchableOpacity>
                     </View>
                 </View>
 

@@ -4,8 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Platform } from 'react-native';
 import { StudentTabParamList } from '../types';
 import { DashboardScreen } from '../screens/student/DashboardScreen';
-import { CoursesScreen } from '../screens/student/CoursesScreen';
-
+import { CommunityScreen } from '../screens/student/CommunityScreen';
 import { LibraryScreen } from '../screens/student/LibraryScreen';
 import { ProfileScreen } from '../screens/student/ProfileScreen';
 import { useAppTheme } from '../hooks/useAppTheme';
@@ -72,17 +71,18 @@ export const StudentNavigator = () => {
                 }}
             />
             <Tab.Screen
-                name="CoursesTab"
-                component={CoursesScreen}
+                name="CommunityTab"
+                component={CommunityScreen}
                 options={{
                     tabBarLabel: 'Community',
-                    tabBarIcon: ({ color, size, focused }) => (
+                    tabBarIcon: ({ color, focused }) => (
                         <Ionicons
-                            name={focused ? "people" : "people-outline"}
+                            name={focused ? "chatbubbles" : "chatbubbles-outline"}
                             size={24}
                             color={color}
                         />
                     ),
+                    tabBarStyle: { display: 'none' },
                 }}
             />
             <Tab.Screen
