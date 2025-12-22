@@ -1,13 +1,22 @@
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 // Environment variables from app.json extra or .env
 const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = Constants.expoConfig?.extra?.supabaseAnonKey || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
+console.log('Supabase Configuration:', {
+    url: supabaseUrl,
+    hasKey: !!supabaseAnonKey,
+    platform: Platform.OS
+});
+
 if (!supabaseUrl || !supabaseAnonKey) {
-    console.warn('Missing Supabase environment variables. Please configure them in .env or app.json');
+    console.error('❌ Missing Supabase environment variables!');
+    console.error('URL:', supabaseUrl);
+    console.error('Has Key:', !!supabaseAnonKey);
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -17,30 +26,59 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         persistSession: true,
         detectSessionInUrl: false,
     },
+    global: {
+        headers: {
+            'X-Client-Info': `math4code-app/${Platform.OS}`,
+        },
+    },
 });
 
 // Helper functions for auth
 export const authService = {
     async signIn(email: string, password: string) {
-        const { data, error } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-        });
-        return { data, error };
+        try {
+            console.log('🔐 Attempting login for:', email);
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+            });
+
+            if (error) {
+                console.error('❌ Login error:', error.message);
+            } else {
+                console.log('✅ Login successful');
+            }
+
+            return { data, error };
+        } catch (error: any) {
+            console.error('❌ Network error during login:', error);
+            throw new Error(
+                error.message ||
+                'Network error. Please check your internet connection and try again.'
+            );
+        }
     },
 
     async signUp(email: string, password: string, fullName: string, referralCode?: string) {
-        const { data, error } = await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-                data: {
-                    full_name: fullName,
-                    referral_code: referralCode,
+        try {
+            const { data, error } = await supabase.auth.signUp({
+                email,
+                password,
+                options: {
+                    data: {
+                        full_name: fullName,
+                        referral_code: referralCode,
+                    },
                 },
-            },
-        });
-        return { data, error };
+            });
+            return { data, error };
+        } catch (error: any) {
+            console.error('❌ Network error during signup:', error);
+            throw new Error(
+                error.message ||
+                'Network error. Please check your internet connection and try again.'
+            );
+        }
     },
 
     async signOut() {

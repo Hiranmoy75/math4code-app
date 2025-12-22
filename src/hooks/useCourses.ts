@@ -7,19 +7,38 @@ export interface CourseWithEnrollment extends Course {
     enrollment_status?: string;
 }
 
-export const useCourses = () => {
+type CourseFilter = 'all' | 'popular' | 'new';
+
+export const useCourses = (filter: CourseFilter = 'all', limit?: number) => {
     return useQuery({
-        queryKey: ['courses'],
+        queryKey: ['courses', filter, limit],
         queryFn: async () => {
             const { data: { user } } = await supabase.auth.getUser();
 
             if (!user) throw new Error('User not authenticated');
 
-            // Fetch all courses
-            const { data: courses, error: coursesError } = await supabase
+            // Build query based on filter
+            let query = supabase
                 .from('courses')
-                .select('*')
-                .order('created_at', { ascending: false });
+                .select('*');
+
+            // Apply filter
+            if (filter === 'popular') {
+                // Order by a popularity metric (you can adjust this)
+                query = query.order('created_at', { ascending: false });
+            } else if (filter === 'new') {
+                query = query.order('created_at', { ascending: false });
+            } else {
+                // 'all' - default ordering
+                query = query.order('created_at', { ascending: false });
+            }
+
+            // Apply limit if provided
+            if (limit) {
+                query = query.limit(limit);
+            }
+
+            const { data: courses, error: coursesError } = await query;
 
             if (coursesError) throw coursesError;
 
@@ -35,7 +54,7 @@ export const useCourses = () => {
             // Map enrollments to courses
             const enrolledCourseIds = new Set(enrollments?.map(e => e.course_id));
 
-            const coursesWithStatus: CourseWithEnrollment[] = courses.map(course => ({
+            const coursesWithStatus: CourseWithEnrollment[] = (courses || []).map(course => ({
                 ...course,
                 is_enrolled: enrolledCourseIds.has(course.id),
                 enrollment_status: enrolledCourseIds.has(course.id) ? 'active' : undefined

@@ -8,11 +8,12 @@ import {
     Text,
     Platform,
     SafeAreaView,
-    StatusBar
+    StatusBar,
+    Linking
 } from 'react-native';
-import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, CommonActions } from '@react-navigation/native';
+import * as WebBrowser from 'expo-web-browser';
 
 import { colors } from '../../constants/colors';
 import { textStyles } from '../../constants/typography';
@@ -24,75 +25,59 @@ export const PaymentWebViewScreen = () => {
     const route = useRoute<any>();
     const { paymentUrl, transactionId, courseId } = route.params;
 
-    const webViewRef = useRef<WebView>(null);
-    const [isWebViewLoading, setIsWebViewLoading] = useState(true);
     const [isVerifying, setIsVerifying] = useState(false);
-    const [verificationAttempted, setVerificationAttempted] = useState(false);
+    const [browserResult, setBrowserResult] = useState<WebBrowser.WebBrowserResult | null>(null);
 
-    // Safety timeout for loading state
+    // Open WebBrowser immediately on mount
     useEffect(() => {
-        let timeout: NodeJS.Timeout;
-        if (isWebViewLoading) {
-            timeout = setTimeout(() => {
-                if (isWebViewLoading) {
+        openPaymentBrowser();
+    }, []);
 
-                    setIsWebViewLoading(false);
-                }
-            }, 15000); // 15 seconds timeout
+    const openPaymentBrowser = async () => {
+        try {
+            // Open the payment URL in the system browser (Chrome Custom Tabs / Safari View Controller)
+            // This bypasses WebView restrictions like INTERNAL_SECURITY_BLOCK_1
+            const result = await WebBrowser.openBrowserAsync(paymentUrl, {
+                presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+                toolbarColor: colors.primary,
+                controlsColor: colors.surface,
+                dismissButtonStyle: 'close',
+            });
+
+            setBrowserResult(result);
+
+            // If the user closed the browser manually (result.type === 'cancel' or 'dismiss'),
+            // we should check if the payment was actually successful in the background.
+            if (result.type === 'cancel' || result.type === 'dismiss') {
+                // Optional: Auto-verify on return if user closed it
+                // But let's leave it to manual "Verify" button or explicit deep link for now to avoid spam
+            }
+        } catch (error) {
+            console.error("Failed to open browser:", error);
+            Alert.alert("Error", "Could not open payment page.");
         }
-        return () => clearTimeout(timeout);
-    }, [isWebViewLoading]);
-
-    // Prevent back action during verification
-    useEffect(() => {
-        const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
-            if (isVerifying) {
-                e.preventDefault();
-                Alert.alert(
-                    'Payment in Progress',
-                    'Please wait while we verify your payment. Do not close this screen.',
-                    [{ text: 'OK' }]
-                );
-            }
-        });
-        return unsubscribe;
-    }, [navigation, isVerifying]);
-
-    // Web Polling Logic
-    useEffect(() => {
-        if (Platform.OS !== 'web') return;
-
-        const interval = setInterval(async () => {
-            if (isVerifying || verificationAttempted) return;
-
-            try {
-
-                const response = await api.verifyPayment(transactionId, courseId);
-
-                if (response.success) {
-                    clearInterval(interval);
-                    handlePaymentVerification();
-                }
-            } catch (error: any) {
-
-
-                if (Platform.OS === 'web' && error.message && error.message.includes('Network request failed') && !verificationAttempted) {
-
-                }
-            }
-        }, 5000);
-
-        return () => clearInterval(interval);
-    }, [Platform.OS, isVerifying, verificationAttempted, transactionId, courseId]);
+    };
 
     const handlePaymentVerification = async () => {
-        if (verificationAttempted) return;
-        setVerificationAttempted(true);
         setIsVerifying(true);
 
-        try {
+        // Function to attempt verification with retries
+        const verifyWithRetry = async (attemptsLeft: number): Promise<any> => {
+            try {
+                return await api.verifyPayment(transactionId, courseId);
+            } catch (error) {
+                if (attemptsLeft > 0) {
+                    // Wait 2 seconds and retry
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    return verifyWithRetry(attemptsLeft - 1);
+                }
+                throw error;
+            }
+        };
 
-            const response = await api.verifyPayment(transactionId, courseId);
+        try {
+            // Attempt verification
+            const response = await verifyWithRetry(2);
 
             if (response.success) {
                 Alert.alert(
@@ -118,63 +103,23 @@ export const PaymentWebViewScreen = () => {
             }
         } catch (error: any) {
             console.error('Payment verification error:', error);
+            let errorMessage = "We couldn't verify your payment.";
+            if (error.message) errorMessage = error.message;
+
             Alert.alert(
-                "Payment Failed",
-                error.message || "We couldn't verify your payment. If money was deducted, it will be refunded automatically.",
+                "Payment Status",
+                `${errorMessage}\n\nIf you completed the payment, please try verifying again.`,
                 [{
-                    text: "Retry",
-                    onPress: () => {
-                        setVerificationAttempted(false);
-                        setIsVerifying(false);
-                        if (Platform.OS !== 'web') {
-                            webViewRef.current?.reload();
-                        }
-                    }
+                    text: "Retry Verification",
+                    onPress: () => handlePaymentVerification()
                 }, {
-                    text: "Cancel",
+                    text: "Close",
                     style: "cancel",
                     onPress: () => navigation.goBack()
                 }]
             );
         } finally {
             setIsVerifying(false);
-        }
-    };
-
-    const handleNavigationStateChange = (navState: any) => {
-        const { url, loading } = navState;
-
-
-        // Check for success redirect, OR any return to our domain (including login redirect)
-        if (
-            url.includes('/payment/success') ||
-            url.includes('/api/phonepe/redirect') ||
-            url.includes('/login') ||
-            (url.includes('math4code.com') && !url.includes('google.com'))
-        ) {
-
-            webViewRef.current?.stopLoading();
-            handlePaymentVerification();
-            return;
-        }
-
-        // Check for failure redirect
-        if (url.includes('/payment/failed')) {
-
-            webViewRef.current?.stopLoading();
-            Alert.alert(
-                "Payment Failed",
-                "The payment was not completed.",
-                [{
-                    text: "Retry",
-                    onPress: () => webViewRef.current?.reload()
-                }, {
-                    text: "Cancel",
-                    style: "cancel",
-                    onPress: () => navigation.goBack()
-                }]
-            );
-            return;
         }
     };
 
@@ -189,41 +134,6 @@ export const PaymentWebViewScreen = () => {
         );
     };
 
-    // Web Render
-    if (Platform.OS === 'web') {
-        return (
-            <SafeAreaView style={styles.container}>
-                <View style={styles.header}>
-                    <TouchableOpacity onPress={handleGoBack} style={styles.backButton} disabled={isVerifying}>
-                        <Ionicons name="close" size={24} color={colors.text} />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Secure Payment</Text>
-                    <View style={styles.placeholder} />
-                </View>
-
-                <View style={styles.webViewContainer}>
-                    <iframe
-                        src={paymentUrl}
-                        style={{ width: '100%', height: '100%', border: 'none' }}
-                        title="Payment Gateway"
-                    />
-
-                    {/* Web Overlay for Verification */}
-                    {isVerifying && (
-                        <View style={styles.verificationOverlay}>
-                            <View style={styles.verificationCard}>
-                                <ActivityIndicator size="large" color={colors.primary} />
-                                <Text style={styles.verificationTitle}>Verifying Payment</Text>
-                                <Text style={styles.verificationText}>Please do not close this tab...</Text>
-                            </View>
-                        </View>
-                    )}
-                </View>
-            </SafeAreaView>
-        );
-    }
-
-    // Native Render
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor={colors.surface} />
@@ -232,56 +142,45 @@ export const PaymentWebViewScreen = () => {
                 <TouchableOpacity onPress={handleGoBack} style={styles.backButton} disabled={isVerifying}>
                     <Ionicons name="close" size={24} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Secure Payment</Text>
-                <View style={styles.placeholder} />
+                <Text style={styles.headerTitle}>Payment</Text>
+                <View style={{ width: 40 }} />
             </View>
 
-            <View style={styles.webViewContainer}>
-                <WebView
-                    ref={webViewRef}
-                    source={{ uri: paymentUrl }}
-                    originWhitelist={['*']}
-                    onNavigationStateChange={handleNavigationStateChange}
-                    onLoadStart={(syntheticEvent) => {
-                        const { nativeEvent } = syntheticEvent;
-
-                        setIsWebViewLoading(true);
-                    }}
-                    onLoadEnd={(syntheticEvent) => {
-                        const { nativeEvent } = syntheticEvent;
-
-                        setIsWebViewLoading(false);
-                    }}
-                    onError={(syntheticEvent) => {
-                        const { nativeEvent } = syntheticEvent;
-                        console.error('WebView Error:', nativeEvent);
-                        setIsWebViewLoading(false);
-                        Alert.alert('Error', 'Failed to load payment page. Please try again.');
-                    }}
-                    style={styles.webView}
-                    javaScriptEnabled={true}
-                    domStorageEnabled={true}
-                    startInLoadingState={true}
-                    scalesPageToFit={true}
-                />
-
-                {isWebViewLoading && (
-                    <View style={styles.loadingOverlay}>
-                        <ActivityIndicator size="large" color={colors.primary} />
-                        <Text style={styles.loadingText}>Loading payment gateway...</Text>
-                    </View>
-                )}
-            </View>
-
-            {isVerifying && (
-                <View style={styles.verificationOverlay}>
-                    <View style={styles.verificationCard}>
-                        <ActivityIndicator size="large" color={colors.primary} />
-                        <Text style={styles.verificationTitle}>Verifying Payment</Text>
-                        <Text style={styles.verificationText}>Please do not close the app...</Text>
-                    </View>
+            <View style={styles.contentContainer}>
+                <View style={styles.iconContainer}>
+                    <Ionicons name="card-outline" size={64} color={colors.primary} />
                 </View>
-            )}
+
+                <Text style={styles.title}>Completing Payment</Text>
+                <Text style={styles.subtitle}>
+                    Please complete the payment in the browser window.
+                </Text>
+
+                <TouchableOpacity
+                    style={styles.primaryButton}
+                    onPress={openPaymentBrowser}
+                >
+                    <Text style={styles.primaryButtonText}>Open Payment Page</Text>
+                </TouchableOpacity>
+
+                <View style={styles.divider} />
+
+                <Text style={styles.helpText}>
+                    Already paid? Click below to verify.
+                </Text>
+
+                <TouchableOpacity
+                    style={[styles.verifyButton, isVerifying && styles.verifyButtonDisabled]}
+                    onPress={handlePaymentVerification}
+                    disabled={isVerifying}
+                >
+                    {isVerifying ? (
+                        <ActivityIndicator color={colors.surface} />
+                    ) : (
+                        <Text style={styles.verifyButtonText}>Verify Payment Status</Text>
+                    )}
+                </TouchableOpacity>
+            </View>
         </SafeAreaView>
     );
 };
@@ -309,57 +208,77 @@ const styles = StyleSheet.create({
         color: colors.text,
         fontWeight: '600',
     },
-    placeholder: {
-        width: 40,
-    },
-    webViewContainer: {
+    contentContainer: {
         flex: 1,
-        position: 'relative',
-    },
-    webView: {
-        flex: 1,
-        backgroundColor: colors.background,
-    },
-    loadingOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: colors.background,
         justifyContent: 'center',
         alignItems: 'center',
-        zIndex: 1,
-    },
-    loadingText: {
-        ...textStyles.body,
-        color: colors.textSecondary,
-        marginTop: spacing.md,
-    },
-    verificationOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 10,
-    },
-    verificationCard: {
-        backgroundColor: colors.surface,
         padding: spacing.xl,
-        borderRadius: 16,
-        alignItems: 'center',
-        width: '80%',
-        elevation: 5,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
     },
-    verificationTitle: {
+    iconContainer: {
+        marginBottom: spacing.lg,
+        padding: spacing.lg,
+        backgroundColor: colors.primary + '10', // 10% opacity
+        borderRadius: 50,
+    },
+    title: {
         ...textStyles.h3,
         color: colors.text,
-        marginTop: spacing.md,
-        marginBottom: spacing.xs,
+        marginBottom: spacing.sm,
+        textAlign: 'center',
     },
-    verificationText: {
+    subtitle: {
         ...textStyles.body,
         color: colors.textSecondary,
         textAlign: 'center',
+        marginBottom: spacing.xl,
+    },
+    primaryButton: {
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.primary,
+        paddingVertical: spacing.md,
+        paddingHorizontal: spacing.xl,
+        borderRadius: 12,
+        marginBottom: spacing.xl,
+        width: '100%',
+        alignItems: 'center',
+    },
+    primaryButtonText: {
+        ...textStyles.button,
+        color: colors.primary,
+        fontSize: 16,
+    },
+    divider: {
+        height: 1,
+        backgroundColor: colors.border,
+        width: '100%',
+        marginBottom: spacing.lg,
+    },
+    helpText: {
+        ...textStyles.caption,
+        color: colors.textSecondary,
+        marginBottom: spacing.md,
+    },
+    verifyButton: {
+        backgroundColor: colors.primary,
+        paddingVertical: spacing.md,
+        paddingHorizontal: spacing.xl,
+        borderRadius: 12,
+        width: '100%',
+        alignItems: 'center',
+        elevation: 2,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+    },
+    verifyButtonDisabled: {
+        opacity: 0.7,
+    },
+    verifyButtonText: {
+        ...textStyles.button,
+        color: colors.surface,
+        fontSize: 16,
+        fontWeight: 'bold',
     },
 });

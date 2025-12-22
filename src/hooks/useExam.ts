@@ -55,12 +55,85 @@ export const useExam = (examId?: string) => {
 
         const { data: exam, error: examError } = await supabase
             .from('exams')
-            .select('max_attempts')
+            .select('max_attempts, start_time, end_time')
             .eq('id', examId)
             .single();
 
         if (examError) throw examError;
 
+        // Check exam date/time availability
+        const now = new Date();
+
+        if (exam.start_time) {
+            const startTime = new Date(exam.start_time);
+            if (now < startTime) {
+                return {
+                    eligible: false,
+                    reason: 'upcoming',
+                    message: `This exam will be available from ${startTime.toLocaleString()}`,
+                    startTime: startTime
+                };
+            }
+        }
+
+        if (exam.end_time) {
+            const endTime = new Date(exam.end_time);
+            if (now > endTime) {
+                return {
+                    eligible: false,
+                    reason: 'expired',
+                    message: `This exam ended on ${endTime.toLocaleString()}`,
+                    endTime: endTime
+                };
+            }
+        }
+
+        // Check LESSON-based prerequisite (quiz lessons only)
+        // 1. Find the lesson containing this exam
+        const { data: currentLesson } = await supabase
+            .from('lessons')
+            .select('id, title, prerequisite_lesson_id, sequential_unlock_enabled, content_type, exam_id')
+            .eq('exam_id', examId)
+            .eq('content_type', 'quiz')
+            .limit(1)
+            .maybeSingle();
+
+        // 2. Check if this lesson has sequential unlock enabled and a prerequisite
+        if (currentLesson?.sequential_unlock_enabled &&
+            currentLesson.prerequisite_lesson_id &&
+            currentLesson.prerequisite_lesson_id !== currentLesson.id) {
+
+            // 3. Get the prerequisite lesson and its exam
+            const { data: prereqLesson } = await supabase
+                .from('lessons')
+                .select('id, title, exam_id')
+                .eq('id', currentLesson.prerequisite_lesson_id)
+                .single();
+
+            if (prereqLesson?.exam_id) {
+                // Safeguard: If the prerequisite points to the SAME exam, ignore it
+                if (prereqLesson.exam_id !== examId) {
+                    // 4. Check if student has completed the prerequisite lesson's exam
+                    const { data: prerequisiteAttempts } = await supabase
+                        .from('exam_attempts')
+                        .select('id, status')
+                        .eq('exam_id', prereqLesson.exam_id)
+                        .eq('student_id', studentId)
+                        .eq('status', 'submitted');
+
+                    if (!prerequisiteAttempts || prerequisiteAttempts.length === 0) {
+                        return {
+                            eligible: false,
+                            reason: 'prerequisite',
+                            message: 'You must complete the previous quiz first',
+                            prerequisiteTitle: prereqLesson.title || 'Previous Quiz'
+                        };
+                    }
+                }
+            }
+        }
+
+        // Check max attempts
         if (exam.max_attempts) {
             const { count, error: countError } = await supabase
                 .from('exam_attempts')
@@ -111,7 +184,12 @@ export const useExam = (examId?: string) => {
         return data as ExamAttempt;
     };
 
-    const saveResponse = async ({ attemptId, questionId, answer }: { attemptId: string, questionId: string, answer: any }) => {
+    const saveResponse = async ({ attemptId, questionId, answer, isMarkedForReview }: {
+        attemptId: string,
+        questionId: string,
+        answer: any,
+        isMarkedForReview?: boolean
+    }) => {
         // Handle array answers for MSQ
         const studentAnswer = Array.isArray(answer) ? JSON.stringify(answer) : String(answer);
 
@@ -124,9 +202,14 @@ export const useExam = (examId?: string) => {
             .single();
 
         if (existingResponse) {
+            const updateData: any = { student_answer: studentAnswer };
+            if (isMarkedForReview !== undefined) {
+                updateData.is_marked_for_review = isMarkedForReview;
+            }
+
             const { error } = await supabase
                 .from('responses')
-                .update({ student_answer: studentAnswer })
+                .update(updateData)
                 .eq('id', existingResponse.id);
             if (error) throw error;
         } else {
@@ -135,7 +218,8 @@ export const useExam = (examId?: string) => {
                 .insert({
                     attempt_id: attemptId,
                     question_id: questionId,
-                    student_answer: studentAnswer
+                    student_answer: studentAnswer,
+                    is_marked_for_review: isMarkedForReview || false
                 });
             if (error) throw error;
         }

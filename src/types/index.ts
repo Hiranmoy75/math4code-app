@@ -41,6 +41,10 @@ export interface Lesson {
     id: string;
     title: string;
     content_type: 'video' | 'pdf' | 'text' | 'quiz' | 'exam';
+    description?: string;
+    video_url?: string;
+    pdf_url?: string;
+    text_content?: string;
     content_url?: string;
     content_text?: string;
     video_duration?: number; // in minutes
@@ -51,6 +55,18 @@ export interface Lesson {
     thumbnail_url?: string;
     is_downloadable?: boolean;
     exam_id?: string;
+    // Live class fields
+    is_live?: boolean;
+    meeting_url?: string;
+    meeting_date?: string;
+    meeting_platform?: 'google_meet' | 'zoom' | 'teams' | 'other';
+    // Bunny.net video fields
+    bunny_video_id?: string;
+    bunny_library_id?: string;
+    bunny_stream_id?: string;
+    video_provider?: 'youtube' | 'bunny' | 'direct';
+    video_type?: 'vod' | 'live';
+    video_status?: string;
 }
 
 export interface Exam {
@@ -77,6 +93,8 @@ export interface Section {
     duration_minutes: number;
     total_marks: number;
     section_order: number;
+    max_questions_to_attempt?: number | null;
+    required_attempts?: number | null;
     questions?: Question[];
 }
 
@@ -246,12 +264,16 @@ export type RootStackParamList = {
     AllCourses: undefined;
     Mentions: undefined;
     Bookmarks: undefined;
+    LegalPage: { type: 'privacy' | 'terms' | 'refund' };
+    RewardScreen: undefined;
+    ResetPassword: undefined;
 };
 
 export type AuthStackParamList = {
     Login: undefined;
     Signup: undefined;
     ForgotPassword: undefined;
+    ResetPassword: undefined;
 };
 
 export type StudentTabParamList = {

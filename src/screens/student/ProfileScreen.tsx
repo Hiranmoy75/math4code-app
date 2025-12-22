@@ -328,9 +328,15 @@ export const ProfileScreen = () => {
                 </View>
 
                 {/* Badges */}
-                {badges && badges.length > 0 && (
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Badges ({badges.length})</Text>
+                <View style={styles.section}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
+                        <Text style={styles.sectionTitle}>Badges ({badges?.length || 0})</Text>
+                        <TouchableOpacity onPress={() => navigation.navigate('RewardScreen')}>
+                            <Text style={{ color: colors.primary, fontWeight: '600' }}>View All Rewards</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {badges && badges.length > 0 ? (
                         <View style={styles.badgesContainer}>
                             {badges.slice(0, 6).map((badge) => (
                                 <View key={badge.id} style={styles.badgeItem}>
@@ -344,8 +350,16 @@ export const ProfileScreen = () => {
                                 </View>
                             ))}
                         </View>
-                    </View>
-                )}
+                    ) : (
+                        <TouchableOpacity
+                            style={[styles.menuItem, { justifyContent: 'center', backgroundColor: colors.surfaceAlt }]}
+                            onPress={() => navigation.navigate('RewardScreen')}
+                        >
+                            <Ionicons name="gift-outline" size={24} color={colors.primary} style={{ marginRight: 8 }} />
+                            <Text style={[styles.menuLabel, { flex: 0 }]}>Visit Rewards Center</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
 
                 {/* Menu Items */}
                 <View style={styles.section}>
@@ -392,6 +406,39 @@ export const ProfileScreen = () => {
                         <Text style={styles.menuLabel}>Help & Support</Text>
                         <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
                     </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.menuItem}
+                        onPress={() => navigation.navigate('LegalPage', { type: 'privacy' })}
+                    >
+                        <View style={styles.menuIconContainer}>
+                            <Ionicons name="shield-checkmark-outline" size={24} color={colors.primary} />
+                        </View>
+                        <Text style={styles.menuLabel}>Privacy Policy</Text>
+                        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.menuItem}
+                        onPress={() => navigation.navigate('LegalPage', { type: 'terms' })}
+                    >
+                        <View style={styles.menuIconContainer}>
+                            <Ionicons name="document-text-outline" size={24} color={colors.primary} />
+                        </View>
+                        <Text style={styles.menuLabel}>Terms of Use</Text>
+                        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.menuItem}
+                        onPress={() => navigation.navigate('LegalPage', { type: 'refund' })}
+                    >
+                        <View style={styles.menuIconContainer}>
+                            <Ionicons name="cash-outline" size={24} color={colors.primary} />
+                        </View>
+                        <Text style={styles.menuLabel}>Refund Policy</Text>
+                        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+                    </TouchableOpacity>
                 </View>
 
                 {/* Logout Button */}
@@ -420,6 +467,6 @@ export const ProfileScreen = () => {
                 onConfirm={confirmLogout}
                 onCancel={() => setShowLogoutDialog(false)}
             />
-        </SafeAreaView>
+        </SafeAreaView >
     );
 };

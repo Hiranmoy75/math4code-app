@@ -13,23 +13,19 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { BlurView } from 'expo-blur';
-
-import { authService } from '../../services/supabase';
-import { spacing, borderRadius } from '../../constants/spacing';
+import { supabase } from '../../services/supabase';
+import { spacing } from '../../constants/spacing';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../types';
 import { useStatusBar } from '../../hooks/useStatusBar';
 
-type SignupScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'Signup'>;
+type ResetPasswordNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'ResetPassword'>;
 
-export const SignupScreen = () => {
-    const navigation = useNavigation<SignupScreenNavigationProp>();
-    const [fullName, setFullName] = useState('');
-    const [email, setEmail] = useState('');
+export const ResetPasswordScreen = () => {
+    const navigation = useNavigation<ResetPasswordNavigationProp>();
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-    const [referralCode, setReferralCode] = useState('');
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -37,9 +33,9 @@ export const SignupScreen = () => {
     // Status bar control
     useStatusBar('#E8EAF6');
 
-    const handleSignup = async () => {
-        if (!fullName || !email || !password || !confirmPassword) {
-            Alert.alert('Error', 'Please fill in all required fields');
+    const handleUpdatePassword = async () => {
+        if (!password || !confirmPassword) {
+            Alert.alert('Error', 'Please fill in both fields');
             return;
         }
 
@@ -55,20 +51,17 @@ export const SignupScreen = () => {
 
         setLoading(true);
         try {
-            const { data, error } = await authService.signUp(
-                email.trim(),
-                password,
-                fullName.trim(),
-                referralCode.trim() || undefined
-            );
+            const { error } = await supabase.auth.updateUser({
+                password: password,
+            });
 
             if (error) {
-                Alert.alert('Signup Failed', error.message);
+                Alert.alert('Error', error.message);
             } else {
                 Alert.alert(
-                    'Success!',
-                    'Account created successfully. Please check your email to verify your account.',
-                    [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
+                    'Success',
+                    'Your password has been updated successfully.',
+                    [{ text: 'Login', onPress: () => navigation.navigate('Login') }]
                 );
             }
         } catch (error: any) {
@@ -106,43 +99,18 @@ export const SignupScreen = () => {
                         </View>
 
                         {/* Title */}
-                        <Text style={styles.title}>Create your account</Text>
+                        <Text style={styles.title}>Reset Password</Text>
+                        <Text style={styles.subtitle}>
+                            Create a strong password for your account
+                        </Text>
 
-                        {/* Full Name Input */}
+                        {/* New Password Input */}
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Full Name</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Enter your full name"
-                                placeholderTextColor="#9E9E9E"
-                                value={fullName}
-                                onChangeText={setFullName}
-                                autoCapitalize="words"
-                            />
-                        </View>
-
-                        {/* Email Input */}
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Email</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Enter your email"
-                                placeholderTextColor="#9E9E9E"
-                                value={email}
-                                onChangeText={setEmail}
-                                keyboardType="email-address"
-                                autoCapitalize="none"
-                                autoCorrect={false}
-                            />
-                        </View>
-
-                        {/* Password Input */}
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Password</Text>
+                            <Text style={styles.label}>New Password</Text>
                             <View style={styles.passwordContainer}>
                                 <TextInput
                                     style={[styles.input, styles.passwordInput]}
-                                    placeholder="Create a password (min 6 characters)"
+                                    placeholder="Enter new password (min 6 characters)"
                                     placeholderTextColor="#9E9E9E"
                                     value={password}
                                     onChangeText={setPassword}
@@ -186,42 +154,28 @@ export const SignupScreen = () => {
                             </View>
                         </View>
 
-                        {/* Referral Code Input */}
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Referral Code (Optional)</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Enter referral code if you have one"
-                                placeholderTextColor="#9E9E9E"
-                                value={referralCode}
-                                onChangeText={setReferralCode}
-                                autoCapitalize="characters"
-                            />
-                        </View>
-
-                        {/* Sign Up Button */}
+                        {/* Update Password Button */}
                         <TouchableOpacity
-                            style={styles.signUpButton}
-                            onPress={handleSignup}
+                            style={styles.updateButton}
+                            onPress={handleUpdatePassword}
                             disabled={loading}
                         >
                             <LinearGradient
                                 colors={['#5C6BC0', '#7E57C2']}
-                                style={styles.signUpGradient}
+                                style={styles.updateGradient}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 0 }}
                             >
-                                <Text style={styles.signUpText}>
-                                    {loading ? 'Creating Account...' : 'Create Account'}
+                                <Text style={styles.updateText}>
+                                    {loading ? 'Updating...' : 'Update Password'}
                                 </Text>
                             </LinearGradient>
                         </TouchableOpacity>
 
-                        {/* Footer Links */}
+                        {/* Footer */}
                         <View style={styles.footer}>
-                            <Text style={styles.footerText}>Already have an account? </Text>
                             <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-                                <Text style={styles.footerLink}>Sign In</Text>
+                                <Text style={styles.footerLink}>Back to Login</Text>
                             </TouchableOpacity>
                         </View>
                     </BlurView>
@@ -275,11 +229,18 @@ const styles = StyleSheet.create({
         marginTop: spacing.xs,
     },
     title: {
-        fontSize: 20,
-        fontWeight: '600',
-        color: '#424242',
+        fontSize: 24,
+        fontWeight: '700',
+        color: '#212121',
+        textAlign: 'center',
+        marginBottom: spacing.sm,
+    },
+    subtitle: {
+        fontSize: 14,
+        color: '#616161',
         textAlign: 'center',
         marginBottom: spacing.xl,
+        paddingHorizontal: spacing.lg,
     },
     inputGroup: {
         marginBottom: spacing.lg,
@@ -312,36 +273,30 @@ const styles = StyleSheet.create({
         top: '50%',
         transform: [{ translateY: -10 }],
     },
-    signUpButton: {
+    updateButton: {
         borderRadius: 24,
         overflow: 'hidden',
-        marginBottom: spacing.lg,
+        marginBottom: spacing.xl,
         marginTop: spacing.md,
     },
-    signUpGradient: {
+    updateGradient: {
         paddingVertical: spacing.md,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    signUpText: {
+    updateText: {
         fontSize: 16,
         fontWeight: '700',
         color: '#FFF',
         letterSpacing: 0.5,
     },
     footer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
         alignItems: 'center',
-        marginTop: spacing.md,
-    },
-    footerText: {
-        fontSize: 14,
-        color: '#616161',
+        marginTop: spacing.lg,
     },
     footerLink: {
         fontSize: 14,
         color: '#5C6BC0',
-        fontWeight: '700',
+        fontWeight: '600',
     },
 });

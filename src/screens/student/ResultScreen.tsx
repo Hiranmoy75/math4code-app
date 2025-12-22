@@ -14,6 +14,9 @@ import { useAppTheme } from '../../hooks/useAppTheme';
 import { textStyles } from '../../constants/typography';
 import { spacing, borderRadius } from '../../constants/spacing';
 import { useExam } from '../../hooks/useExam';
+import { rewardService } from '../../services/rewards';
+import { supabase } from '../../services/supabase';
+import Toast from 'react-native-toast-message';
 
 export const ResultScreen = () => {
     const navigation = useNavigation<any>();
@@ -34,6 +37,24 @@ export const ResultScreen = () => {
                     if (data) {
                         setResult(data);
                         setLoading(false);
+
+                        // --- Reward Logic ---
+                        if (data.percentage >= 40) { // Only award if passed
+                            const { data: { user } } = await supabase.auth.getUser();
+                            if (user) {
+                                const res = await rewardService.awardCoins(user.id, 'quiz_completion', attemptId);
+                                if (res.success) {
+                                    Toast.show({
+                                        type: 'success',
+                                        text1: 'Quiz Completed!',
+                                        text2: res.message,
+                                        visibilityTime: 4000
+                                    });
+                                }
+                            }
+                        }
+                        // --------------------
+
                         return;
                     }
                     await new Promise(resolve => setTimeout(resolve, 1000));

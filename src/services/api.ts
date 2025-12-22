@@ -40,24 +40,39 @@ export const api = {
                 }),
             });
 
+            // Check Content-Type header
+            const contentType = response.headers.get('content-type');
+            const isJson = contentType?.includes('application/json');
+
             const text = await response.text();
             let data;
+
+            if (!isJson || text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+                // Server returned HTML instead of JSON (likely an error page)
+                console.error('Server returned HTML instead of JSON:', text.substring(0, 200));
+                throw new Error('Payment service is temporarily unavailable. Please try again later.');
+            }
+
             try {
                 data = JSON.parse(text);
             } catch (e) {
                 console.error('Failed to parse JSON response:', text.substring(0, 200));
-                throw new Error(`Invalid server response: ${text.substring(0, 100)}...`);
+                throw new Error('Unable to process server response. Please try again.');
             }
-
 
             if (!response.ok) {
                 console.error('Buy Course Failed:', data);
-                throw new Error(data.error || data.message || JSON.stringify(data) || 'Failed to initiate payment');
+                const errorMessage = data.error || data.message || 'Failed to initiate payment';
+                throw new Error(errorMessage);
             }
 
             return data;
-        } catch (error) {
+        } catch (error: any) {
             console.error('Buy Course Error:', error);
+            // Provide user-friendly error messages
+            if (error.message.includes('Network request failed')) {
+                throw new Error('Network error. Please check your internet connection.');
+            }
             throw error;
         }
     },
@@ -79,13 +94,23 @@ export const api = {
                 body: JSON.stringify({ transactionId }),
             });
 
+            // Check Content-Type header
+            const contentType = response.headers.get('content-type');
+            const isJson = contentType?.includes('application/json');
+
             const text = await response.text();
             let data;
+
+            if (!isJson || text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+                console.error('Server returned HTML instead of JSON:', text.substring(0, 200));
+                throw new Error('Payment service is temporarily unavailable. Please try again later.');
+            }
+
             try {
                 data = JSON.parse(text);
             } catch (e) {
                 console.error('Failed to parse JSON response:', text.substring(0, 200));
-                throw new Error(`Invalid server response: ${text.substring(0, 100)}...`);
+                throw new Error('Unable to process server response. Please try again.');
             }
 
             if (!response.ok) {
@@ -93,8 +118,11 @@ export const api = {
             }
 
             return data;
-        } catch (error) {
+        } catch (error: any) {
             console.error('Check Payment Status Error:', error);
+            if (error.message.includes('Network request failed')) {
+                throw new Error('Network error. Please check your internet connection.');
+            }
             throw error;
         }
     },
@@ -143,13 +171,23 @@ export const api = {
                 body: JSON.stringify({ transactionId, courseId }),
             });
 
+            // Check Content-Type header
+            const contentType = response.headers.get('content-type');
+            const isJson = contentType?.includes('application/json');
+
             const text = await response.text();
             let data;
+
+            if (!isJson || text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+                console.error('Server returned HTML instead of JSON:', text.substring(0, 200));
+                throw new Error('Payment verification service is temporarily unavailable. Please try again later.');
+            }
+
             try {
                 data = JSON.parse(text);
             } catch (e) {
                 console.error('Failed to parse JSON response:', text.substring(0, 200));
-                throw new Error(`Invalid server response: ${text.substring(0, 100)}...`);
+                throw new Error('Unable to process server response. Please try again.');
             }
 
             if (!response.ok) {
@@ -157,8 +195,11 @@ export const api = {
             }
 
             return data;
-        } catch (error) {
+        } catch (error: any) {
             console.error('Verify Payment Error:', error);
+            if (error.message.includes('Network request failed')) {
+                throw new Error('Network error. Please check your internet connection.');
+            }
             throw error;
         }
     },

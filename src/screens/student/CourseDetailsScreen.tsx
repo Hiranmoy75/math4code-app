@@ -650,9 +650,9 @@ export const CourseDetailsScreen = () => {
                     <Text style={styles.price}>
                         {course.price === 0 ? 'Free' : `₹${course.price}`}
                     </Text>
-                    {course.original_price && course.original_price > course.price && (
-                        <Text style={styles.originalPrice}>₹{course.original_price}</Text>
-                    )}
+                    {/* {course.original_price && course.original_price > course.price && ( */}
+                    <Text style={styles.originalPrice}>₹{Math.round(course.price * 1.5)}</Text>
+                    {/* )} */}
                 </View>
                 <TouchableOpacity
                     style={styles.buyButton}

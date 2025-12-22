@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, createElement } from 'react';
 import {
     View,
     Text,
@@ -9,9 +9,12 @@ import {
     StatusBar,
     Dimensions,
     Alert,
+    Linking,
+    Platform,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { WebView } from 'react-native-webview';
 import { VideoPlayer } from '../../components/VideoPlayer';
 import { PDFViewer } from '../../components/PDFViewer';
 import { TextContentViewer } from '../../components/TextContentViewer';
@@ -21,6 +24,8 @@ import { useCourseProgress } from '../../hooks/useLessonProgress';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { RootStackParamList, Lesson } from '../../types';
 import { supabase } from '../../services/supabase';
+import Toast from 'react-native-toast-message';
+import { rewardService } from '../../services/rewards';
 
 type LessonPlayerScreenRouteProp = RouteProp<RootStackParamList, 'LessonPlayer'>;
 
@@ -88,7 +93,32 @@ export const LessonPlayerScreen = () => {
             if (error) throw error;
 
             setIsLessonCompleted(true);
-            Alert.alert("Success", "Lesson marked as complete!");
+
+            // --- Reward Logic ---
+            let rewardMessage = "Lesson marked as complete!";
+
+            // 1. Generic Lesson Reward (Video, PDF, Text)
+            // We use 'lesson_completion' for all types now
+            const res = await rewardService.awardCoins(user.id, 'lesson_completion', currentLesson.id);
+            if (res.success) {
+                rewardMessage = `⭐ ${res.message}`;
+            }
+
+            // 2. Module Completion Reward
+            if (currentLesson.module_id) {
+                const modRes = await rewardService.checkModuleCompletion(user.id, currentLesson.module_id);
+                if (modRes?.success) {
+                    rewardMessage += `\n📦 ${modRes.message}`;
+                }
+            }
+
+            Toast.show({
+                type: 'success',
+                text1: 'Well Done!',
+                text2: rewardMessage,
+                visibilityTime: 4000
+            });
+            // --------------------
 
             // Refresh progress
             refetch();
@@ -96,7 +126,11 @@ export const LessonPlayerScreen = () => {
 
         } catch (error) {
             console.error('Error marking lesson complete:', error);
-            Alert.alert("Error", "Failed to save progress");
+            Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'Failed to save progress'
+            });
         }
     };
 
@@ -305,12 +339,186 @@ export const LessonPlayerScreen = () => {
 
         switch (currentLesson.content_type) {
             case 'video':
+                // Check if this is a live class
+                if (currentLesson.is_live && currentLesson.meeting_url) {
+                    const meetingDate = currentLesson.meeting_date ? new Date(currentLesson.meeting_date) : null;
+                    const now = new Date();
+                    const isLive = meetingDate ? (now >= new Date(meetingDate.getTime() - 15 * 60000) && now <= new Date(meetingDate.getTime() + 2 * 60 * 60000)) : false;
+                    const isUpcoming = meetingDate ? meetingDate > now && !isLive : false;
+
+                    const handleJoinMeeting = async () => {
+                        try {
+                            const supported = await Linking.canOpenURL(currentLesson.meeting_url!);
+                            if (supported) {
+                                await Linking.openURL(currentLesson.meeting_url!);
+                            } else {
+                                Alert.alert('Error', 'Cannot open meeting link');
+                            }
+                        } catch (error) {
+                            Alert.alert('Error', 'Failed to open meeting link');
+                        }
+                    };
+
+                    return (
+                        <View style={styles.content}>
+                            <View style={[styles.lessonDetails, { paddingTop: 40 }]}>
+                                {/* Live Class Badge */}
+                                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+                                    <View style={{ backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 }}>
+                                        <Text style={{ color: colors.textInverse, fontSize: 12, fontWeight: '600' }}>
+                                            📹 {currentLesson.meeting_platform?.toUpperCase() || 'GOOGLE MEET'}
+                                        </Text>
+                                    </View>
+                                    {isLive && (
+                                        <View style={{ backgroundColor: '#EF4444', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 }}>
+                                            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '600' }}>
+                                                🔴 LIVE NOW
+                                            </Text>
+                                        </View>
+                                    )}
+                                    {isUpcoming && (
+                                        <View style={{ backgroundColor: colors.surfaceAlt, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: colors.primary }}>
+                                            <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600' }}>
+                                                📅 Upcoming
+                                            </Text>
+                                        </View>
+                                    )}
+                                </View>
+
+                                <Text style={styles.lessonTitle}>{currentLesson.title}</Text>
+                                <Text style={[styles.lessonDescription, { marginBottom: 20 }]}>Live Class Session</Text>
+
+                                {/* Meeting Info Card */}
+                                <View style={{ backgroundColor: colors.surfaceAlt, padding: 16, borderRadius: 12, marginBottom: 20 }}>
+                                    {meetingDate && (
+                                        <>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                                                <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
+                                                <Text style={{ color: colors.text, marginLeft: 8, fontSize: 14 }}>
+                                                    {meetingDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                                                </Text>
+                                            </View>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
+                                                <Text style={{ color: colors.text, marginLeft: 8, fontSize: 14 }}>
+                                                    {meetingDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                                                </Text>
+                                            </View>
+                                        </>
+                                    )}
+                                </View>
+
+                                {/* Status Banner */}
+                                {isLive && (
+                                    <View style={{ backgroundColor: '#FEE2E2', padding: 16, borderRadius: 12, marginBottom: 20, borderWidth: 2, borderColor: '#EF4444' }}>
+                                        <Text style={{ color: '#DC2626', fontWeight: '600', textAlign: 'center' }}>
+                                            🎓 Class is live! Join now to participate
+                                        </Text>
+                                    </View>
+                                )}
+
+                                {isUpcoming && meetingDate && (
+                                    <View style={{ backgroundColor: colors.surfaceAlt, padding: 16, borderRadius: 12, marginBottom: 20, borderWidth: 2, borderColor: colors.primary }}>
+                                        <Text style={{ color: colors.primary, fontWeight: '600', textAlign: 'center' }}>
+                                            ⏰ Class starts {Math.floor((meetingDate.getTime() - now.getTime()) / 60000)} minutes from now
+                                        </Text>
+                                    </View>
+                                )}
+
+                                {!isLive && !isUpcoming && (
+                                    <View style={{ backgroundColor: colors.surfaceAlt, padding: 16, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: colors.border }}>
+                                        <Text style={{ color: colors.textSecondary, textAlign: 'center' }}>
+                                            This class has ended
+                                        </Text>
+                                    </View>
+                                )}
+
+                                {/* Join Button */}
+                                <TouchableOpacity
+                                    style={[
+                                        styles.completeButton,
+                                        { backgroundColor: isLive || isUpcoming ? colors.primary : colors.textSecondary }
+                                    ]}
+                                    onPress={handleJoinMeeting}
+                                    disabled={!isLive && !isUpcoming}
+                                >
+                                    <Ionicons name="videocam" size={20} color={colors.textInverse} />
+                                    <Text style={styles.completeButtonText}>
+                                        {isLive ? '🚀 Join Class Now' : isUpcoming ? '🚀 Join Class' : 'Class Ended'}
+                                    </Text>
+                                </TouchableOpacity>
+
+                                <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: 'center', marginTop: 12 }}>
+                                    Clicking will open {currentLesson.meeting_platform || 'Google Meet'} in your browser
+                                </Text>
+                            </View>
+                        </View>
+                    );
+                }
+
+                // Regular video lesson
                 return (
                     <View style={styles.content}>
-                        <VideoPlayer
-                            url={currentLesson.video_url || ''}
-                            onComplete={markLessonComplete}
-                        />
+                        {/* Check if it's a Bunny.net video */}
+                        {currentLesson.video_provider === 'bunny' && (currentLesson.bunny_video_id || currentLesson.bunny_stream_id) ? (
+                            <View style={{ height: Dimensions.get('window').width * (9 / 16), backgroundColor: '#000' }}>
+                                {/* Check if we have required IDs */}
+                                {currentLesson.bunny_library_id && (currentLesson.bunny_video_id || currentLesson.bunny_stream_id) ? (
+                                    <>
+                                        {Platform.OS === 'web' ? (
+                                            // For web, use createElement for iframe
+                                            createElement('iframe', {
+                                                src: `https://iframe.mediadelivery.net/embed/${currentLesson.bunny_library_id}/${currentLesson.bunny_video_id || currentLesson.bunny_stream_id}?autoplay=false&preload=true`,
+                                                style: {
+                                                    width: '100%',
+                                                    height: '100%',
+                                                    border: 'none',
+                                                },
+                                                allow: 'accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture',
+                                                allowFullScreen: true,
+                                            })
+                                        ) : (
+                                            // For mobile, use WebView
+                                            <WebView
+                                                source={{
+                                                    uri: `https://iframe.mediadelivery.net/embed/${currentLesson.bunny_library_id}/${currentLesson.bunny_video_id || currentLesson.bunny_stream_id}?autoplay=false&preload=true`
+                                                }}
+                                                style={{ flex: 1 }}
+                                                allowsFullscreenVideo={true}
+                                                mediaPlaybackRequiresUserAction={false}
+                                                javaScriptEnabled={true}
+                                                domStorageEnabled={true}
+                                                startInLoadingState={true}
+                                                onError={(syntheticEvent) => {
+                                                    const { nativeEvent } = syntheticEvent;
+                                                    console.error('WebView error:', nativeEvent);
+                                                    Alert.alert('Video Error', 'Failed to load video player');
+                                                }}
+                                                renderLoading={() => (
+                                                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
+                                                        <ActivityIndicator size="large" color={colors.primary} />
+                                                        <Text style={{ color: '#fff', marginTop: 10 }}>Loading video...</Text>
+                                                    </View>
+                                                )}
+                                            />
+                                        )}
+                                    </>
+                                ) : (
+                                    // Missing library or video ID
+                                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+                                        <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
+                                        <Text style={{ color: colors.error, marginTop: 10, textAlign: 'center' }}>
+                                            Video configuration error. Missing library or video ID.
+                                        </Text>
+                                    </View>
+                                )}
+                            </View>
+                        ) : (
+                            <VideoPlayer
+                                url={currentLesson.content_url || currentLesson.video_url || ''}
+                                onComplete={markLessonComplete}
+                            />
+                        )}
                         <View style={styles.lessonDetails}>
                             <Text style={styles.lessonTitle}>{currentLesson.title}</Text>
                             <Text style={styles.lessonDescription}>{currentLesson.description}</Text>
@@ -337,7 +545,7 @@ export const LessonPlayerScreen = () => {
             case 'pdf':
                 return (
                     <PDFViewer
-                        pdfUrl={currentLesson.pdf_url || ''}
+                        pdfUrl={currentLesson.content_url || currentLesson.pdf_url || ''}
                         isDownloadable={currentLesson.is_downloadable}
                         onComplete={markLessonComplete}
                     />
@@ -345,7 +553,7 @@ export const LessonPlayerScreen = () => {
             case 'text': // text content
                 return (
                     <TextContentViewer
-                        content={currentLesson.text_content || ''}
+                        content={currentLesson.content_text || currentLesson.text_content || ''}
                         onComplete={markLessonComplete}
                     />
                 );

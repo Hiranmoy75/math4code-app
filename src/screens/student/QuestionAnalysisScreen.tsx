@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { colors, shadows } from '../../constants/colors';
 import { spacing, borderRadius } from '../../constants/spacing';
 import { supabase } from '../../services/supabase';
+import { MathText } from '../../components/MathText';
 
 interface QuestionWithResponse {
     id: string;
@@ -261,7 +262,7 @@ export const QuestionAnalysisScreen = () => {
 
                                     {isExpanded && (
                                         <View style={styles.questionDetails}>
-                                            <Text style={styles.questionText}>{question.question_text}</Text>
+                                            <MathText content={question.question_text} textColor="#2D3748" fontSize={14} />
 
                                             {/* Options for MCQ/MSQ */}
                                             {(question.question_type === 'MCQ' || question.question_type === 'MSQ') && (
@@ -274,7 +275,7 @@ export const QuestionAnalysisScreen = () => {
 
                                                         return (
                                                             <View key={option.id} style={optionStyle}>
-                                                                <Text style={styles.optionText}>{option.option_text}</Text>
+                                                                <MathText content={option.option_text} textColor="#2D3748" fontSize={14} />
                                                                 {option.is_correct && (
                                                                     <Ionicons name="checkmark-circle" size={20} color="#10B981" />
                                                                 )}
@@ -307,7 +308,7 @@ export const QuestionAnalysisScreen = () => {
                                             {question.explanation && (
                                                 <View style={styles.explanationContainer}>
                                                     <Text style={styles.explanationTitle}>Explanation:</Text>
-                                                    <Text style={styles.explanationText}>{question.explanation}</Text>
+                                                    <MathText content={question.explanation} textColor="#2D3748" fontSize={14} />
                                                 </View>
                                             )}
                                         </View>

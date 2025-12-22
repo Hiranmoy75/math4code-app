@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Toast from 'react-native-toast-message';
+import * as Linking from 'expo-linking';
 
 import { AuthNavigator } from './src/navigation/AuthNavigator';
 import { StudentNavigator } from './src/navigation/StudentNavigator';
@@ -22,45 +23,169 @@ import { AIChatScreen } from './src/screens/student/AIChatScreen';
 import { CoursesScreen } from './src/screens/student/CoursesScreen';
 import { MentionsScreen } from './src/screens/student/MentionsScreen';
 import { BookmarksScreen } from './src/screens/student/BookmarksScreen';
+import { LegalPageScreen } from './src/screens/legal/LegalPageScreen';
+import { ResetPasswordScreen } from './src/screens/auth/ResetPasswordScreen';
+
+import { RewardScreen } from './src/screens/student/RewardScreen';
 import { supabase } from './src/services/supabase';
+import { rewardService } from './src/services/rewards';
 import { colors } from './src/constants/colors';
 import { RootStackParamList } from './src/types';
 import { ThemeProvider } from './src/contexts/ThemeContext';
 
+import { queryClient } from './src/services/queryClient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SplashScreen } from './src/screens/splash/SplashScreen';
+import { OnboardingScreen } from './src/screens/onboarding/OnboardingScreen';
+
 const Stack = createNativeStackNavigator<RootStackParamList>();
-const queryClient = new QueryClient();
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isOnboarded, setIsOnboarded] = useState<boolean>(false);
+  const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
-    // Check initial auth state
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsAuthenticated(!!session);
-      setIsLoading(false);
-    });
+    // Handle Deep Links for Auth (Google / Reset Password)
+    const handleDeepLink = async (event: { url: string }) => {
+      const { url } = event;
 
-    // Listen for auth changes
+      // Extract tokens from hash (Supabase default)
+      if (url.includes('access_token') && url.includes('refresh_token')) {
+        try {
+          // Helper to parsing query params from hash
+          // Format: math4code://auth/callback#access_token=...&refresh_token=...
+          const hash = url.split('#')[1];
+          if (hash) {
+            const params = new URLSearchParams(hash);
+            const access_token = params.get('access_token');
+            const refresh_token = params.get('refresh_token');
+
+            if (access_token && refresh_token) {
+              const { error } = await supabase.auth.setSession({
+                access_token,
+                refresh_token,
+              });
+
+              if (error) {
+                console.error("Error setting session from URL:", error);
+                return false;
+              } else {
+                // Determine if authenticated immediately to prevent login screen flicker
+                setIsAuthenticated(true);
+                return true;
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Error parsing deep link:", e);
+        }
+      }
+      return false;
+    };
+
+    const initApp = async () => {
+      try {
+        // 1. Minimum Splash Time
+        const splashPromise = new Promise(resolve => setTimeout(resolve, 2500));
+
+        // 2. Check Onboarding
+        const onboardingPromise = AsyncStorage.getItem('hasOnboarded');
+
+        // 3. Check Deep Link FIRST
+        const initialUrl = await Linking.getInitialURL();
+        let isDeepLinkAuth = false;
+
+        if (initialUrl && (initialUrl.includes('access_token') || initialUrl.includes('refresh_token'))) {
+          // If we have an auth deep link, handle it and wait
+          isDeepLinkAuth = await handleDeepLink({ url: initialUrl });
+        }
+
+        // 4. If no deep link auth, check standard session
+        let session = null;
+        if (!isDeepLinkAuth) {
+          const { data } = await supabase.auth.getSession();
+          session = data.session;
+          setIsAuthenticated(!!session);
+        }
+
+        // Wait for other promises
+        const [_, hasOnboarded] = await Promise.all([
+          splashPromise,
+          onboardingPromise
+        ]);
+
+        setIsOnboarded(!!hasOnboarded);
+
+        if (session?.user) {
+          // Check for daily streak
+          rewardService.checkStreak(session.user.id).then(res => {
+            if (res.message) {
+              Toast.show({
+                type: 'success',
+                text1: 'Daily Streak',
+                text2: res.message,
+                visibilityTime: 4000
+              });
+            }
+          });
+        }
+      } catch (e) {
+        console.error("Init failed", e);
+      } finally {
+        setIsLoading(false);
+        setShowSplash(false);
+      }
+    };
+
+    initApp();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      // Only update if we didn't just manually set it to true via deep link (though duplicate true set is fine)
+      // This ensures logout updates state correctly
       setIsAuthenticated(!!session);
     });
 
-    return () => subscription.unsubscribe();
+    const linkingSubscription = Linking.addEventListener('url', handleDeepLink);
+
+    return () => {
+      subscription.unsubscribe();
+      linkingSubscription.remove();
+    };
   }, []);
 
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
+  if (showSplash || isLoading) {
+    return <SplashScreen />;
+  }
+
+  if (!isOnboarded) {
+    return <OnboardingScreen onFinish={() => setIsOnboarded(true)} />;
   }
 
   return (
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
-        <NavigationContainer>
+        <NavigationContainer
+          linking={{
+            prefixes: [Linking.createURL('/'), 'math4code://', 'exp://'],
+            config: {
+              screens: {
+                Auth: {
+                  screens: {
+                    ResetPassword: 'reset-password',
+                    Login: 'login',
+                    Signup: 'signup',
+                    ForgotPassword: 'forgot-password'
+                  },
+                },
+                PaymentStatus: 'payment/:status', // Handle /payment/success or /payment/failed
+                // If we want to handle it when logged in too (though unlikely for reset password flow)
+                // Main: { ... }
+              },
+            },
+          }}
+        >
           <Stack.Navigator screenOptions={{ headerShown: false }}>
             {isAuthenticated ? (
               <>
@@ -80,6 +205,10 @@ export default function App() {
                 <Stack.Screen name="AllCourses" component={CoursesScreen} />
                 <Stack.Screen name="Mentions" component={MentionsScreen} />
                 <Stack.Screen name="Bookmarks" component={BookmarksScreen} />
+
+                <Stack.Screen name="LegalPage" component={LegalPageScreen} />
+                <Stack.Screen name="RewardScreen" component={RewardScreen} />
+                <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
               </>
             ) : (
               <Stack.Screen name="Auth" component={AuthNavigator} />

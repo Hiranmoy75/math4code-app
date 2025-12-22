@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
     View,
     Text,
@@ -13,6 +13,7 @@ import {
     Dimensions,
     Platform,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +24,7 @@ import { useExam } from '../../hooks/useExam';
 import { supabase } from '../../services/supabase';
 import { MathText } from '../../components/MathText';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
+import { ExamAccessChecker, ExamAccessStatus } from '../../components/ExamAccessChecker';
 
 const { width } = Dimensions.get('window');
 
@@ -55,7 +57,7 @@ export const ExamScreen = () => {
     const [isExamStarted, setIsExamStarted] = useState(false);
     const [isPaletteOpen, setIsPaletteOpen] = useState(false);
     const [checkingEligibility, setCheckingEligibility] = useState(true);
-    const [eligibilityMessage, setEligibilityMessage] = useState<string | null>(null);
+    const [eligibilityStatus, setEligibilityStatus] = useState<ExamAccessStatus | null>(null);
     const [remainingAttempts, setRemainingAttempts] = useState<number | null>(null);
     const [pauseModalVisible, setPauseModalVisible] = useState(false);
     const [submitModalVisible, setSubmitModalVisible] = useState(false);
@@ -193,14 +195,24 @@ export const ExamScreen = () => {
                     // Check eligibility for new attempt
                     const result = await checkExamEligibility(user.id);
                     if (!result.eligible) {
-                        setEligibilityMessage(result.message || "Not eligible");
+                        setEligibilityStatus({
+                            accessible: false,
+                            reason: result.reason as 'upcoming' | 'expired' | 'prerequisite',
+                            message: result.message,
+                            startTime: result.startTime,
+                            endTime: result.endTime
+                        });
                     } else {
-                        setRemainingAttempts(result.remainingAttempts);
+                        setEligibilityStatus({ accessible: true });
+                        setRemainingAttempts(result.remainingAttempts ?? null);
                     }
                 }
             } catch (error) {
                 console.error(error);
-                setEligibilityMessage("Failed to load exam");
+                setEligibilityStatus({
+                    accessible: false,
+                    message: "Failed to load exam"
+                });
             } finally {
                 setCheckingEligibility(false);
             }
@@ -260,8 +272,26 @@ export const ExamScreen = () => {
         return `${h > 0 ? h + ':' : ''}${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
     };
 
+    const handleToggleMarkForReview = useCallback(async (questionId: string) => {
+        const newMarkedState = !markedForReview[questionId];
+        setMarkedForReview(prev => ({ ...prev, [questionId]: newMarkedState }));
+
+        if (currentAttempt) {
+            try {
+                await saveResponse({
+                    attemptId: currentAttempt.id,
+                    questionId,
+                    answer: responses[questionId] || '',
+                    isMarkedForReview: newMarkedState
+                });
+            } catch (error) {
+                console.error("Failed to update mark for review", error);
+            }
+        }
+    }, [markedForReview, currentAttempt, responses, saveResponse]);
+
     const handleStartExam = async () => {
-        if (eligibilityMessage) return;
+        if (!eligibilityStatus?.accessible) return;
 
         try {
             const { data: { user } } = await supabase.auth.getUser();
@@ -278,6 +308,34 @@ export const ExamScreen = () => {
     };
 
     const handleAnswerChange = async (questionId: string, answer: any) => {
+        // Find the question and its section
+        const question = allQuestions.find(q => q.id === questionId);
+        if (question) {
+            const section = sections?.[question.sectionIndex];
+
+            // Check Max Attempts Restriction
+            if (section?.max_questions_to_attempt) {
+                // Count current attempts in this section (excluding current question if already answered)
+                const currentSectionAttempts = allQuestions
+                    .filter(q => q.sectionIndex === question.sectionIndex)
+                    .filter(q => responses[q.id] !== undefined && responses[q.id] !== '' && q.id !== questionId)
+                    .length;
+
+                // If this is a NEW attempt (not modifying existing answer)
+                const isNewAttempt = !responses[questionId];
+
+                if (isNewAttempt && currentSectionAttempts >= section.max_questions_to_attempt) {
+                    Toast.show({
+                        type: 'error',
+                        text1: 'Section limit reached',
+                        text2: `You can attempt only ${section.max_questions_to_attempt} questions in this section`,
+                        visibilityTime: 3000,
+                    });
+                    return; // Block the attempt
+                }
+            }
+        }
+
         setResponses(prev => ({ ...prev, [questionId]: answer }));
         setVisited(prev => ({ ...prev, [questionId]: true }));
 
@@ -326,6 +384,30 @@ export const ExamScreen = () => {
     };
 
     const confirmSubmit = () => {
+        // Validation: Check Required Attempts for each section
+        if (sections) {
+            for (const section of sections) {
+                if (section.required_attempts) {
+                    const sectionAttempts = allQuestions
+                        .filter(q => q.sectionIndex === section.section_order - 1) // Assuming section_order is 1-based, logical index is 0-based. Wait, allQuestions maps sectionIndex.
+                        // Let's rely on section.id matching
+                        .filter(q => q.sectionId === section.id)
+                        .filter(q => responses[q.id] !== undefined && responses[q.id] !== '')
+                        .length;
+
+                    if (sectionAttempts < section.required_attempts) {
+                        Toast.show({
+                            type: 'error',
+                            text1: 'Requirement not met',
+                            text2: `You must attempt at least ${section.required_attempts} questions in section "${section.title}"`,
+                            visibilityTime: 4000,
+                        });
+                        return;
+                    }
+                }
+            }
+        }
+
         setSubmitModalVisible(true);
     };
 
@@ -535,7 +617,7 @@ export const ExamScreen = () => {
         },
         optionsContainer: {
             gap: spacing.md,
-            paddingBottom: spacing.xxl,
+            paddingBottom: spacing['2xl'],
         },
         optionButton: {
             flexDirection: 'row',
@@ -737,6 +819,11 @@ export const ExamScreen = () => {
     }
 
     if (!isExamStarted) {
+        // Show ExamAccessChecker if exam is not accessible
+        if (eligibilityStatus && !eligibilityStatus.accessible) {
+            return <ExamAccessChecker status={eligibilityStatus} onStartExam={handleStartExam} />;
+        }
+
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.header}>
@@ -749,29 +836,22 @@ export const ExamScreen = () => {
                 <ScrollView style={styles.content}>
                     <Text style={styles.examTitle}>{exam.title}</Text>
 
-                    {eligibilityMessage ? (
-                        <View style={styles.errorBanner}>
-                            <Ionicons name="alert-circle" size={24} color={colors.error} />
-                            <Text style={styles.errorBannerText}>{eligibilityMessage}</Text>
+                    <View style={styles.infoRow}>
+                        <View style={styles.infoItem}>
+                            <Ionicons name="time-outline" size={20} color={colors.textSecondary} />
+                            <Text style={styles.infoText}>{exam.duration_minutes} mins</Text>
                         </View>
-                    ) : (
-                        <View style={styles.infoRow}>
-                            <View style={styles.infoItem}>
-                                <Ionicons name="time-outline" size={20} color={colors.textSecondary} />
-                                <Text style={styles.infoText}>{exam.duration_minutes} mins</Text>
-                            </View>
-                            <View style={styles.infoItem}>
-                                <Ionicons name="help-circle-outline" size={20} color={colors.textSecondary} />
-                                <Text style={styles.infoText}>{exam.total_marks} Marks</Text>
-                            </View>
-                            {remainingAttempts !== Infinity && (
-                                <View style={styles.infoItem}>
-                                    <Ionicons name="repeat-outline" size={20} color={colors.textSecondary} />
-                                    <Text style={styles.infoText}>{remainingAttempts} Attempts Left</Text>
-                                </View>
-                            )}
+                        <View style={styles.infoItem}>
+                            <Ionicons name="help-circle-outline" size={20} color={colors.textSecondary} />
+                            <Text style={styles.infoText}>{exam.total_marks} Marks</Text>
                         </View>
-                    )}
+                        {remainingAttempts !== Infinity && (
+                            <View style={styles.infoItem}>
+                                <Ionicons name="repeat-outline" size={20} color={colors.textSecondary} />
+                                <Text style={styles.infoText}>{remainingAttempts} Attempts Left</Text>
+                            </View>
+                        )}
+                    </View>
 
                     <Text style={styles.sectionTitle}>Instructions:</Text>
                     <Text style={styles.instructionText}>
@@ -785,9 +865,8 @@ export const ExamScreen = () => {
 
                 <View style={styles.footer}>
                     <TouchableOpacity
-                        style={[styles.primaryButton, !!eligibilityMessage && styles.disabledButton]}
+                        style={styles.primaryButton}
                         onPress={handleStartExam}
-                        disabled={!!eligibilityMessage}
                     >
                         <Text style={styles.primaryButtonText}>Start Exam</Text>
                     </TouchableOpacity>
@@ -804,9 +883,31 @@ export const ExamScreen = () => {
 
     if (!currentQuestion) return null;
 
+    const handleClearAnswer = async () => {
+        const questionId = currentQuestion.id;
+
+        // 1. Remove from local state
+        const newResponses = { ...responses };
+        delete newResponses[questionId];
+        setResponses(newResponses);
+
+        // 2. Save cleared state to backend
+        if (currentAttempt) {
+            try {
+                await saveResponse({
+                    attemptId: currentAttempt.id,
+                    questionId,
+                    answer: '', // Sending empty string to indicate cleared answer
+                });
+            } catch (error) {
+                console.error("Failed to clear response", error);
+            }
+        }
+    };
+
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
-            {/* Header */}
+            {/* ... Header ... */}
             <View style={styles.examHeader}>
                 <View style={styles.timerContainer}>
                     <Ionicons name="time" size={16} color={timeLeft < 300 ? colors.error : colors.textInverse} />
@@ -822,7 +923,7 @@ export const ExamScreen = () => {
                     </TouchableOpacity>
 
                     <TouchableOpacity onPress={() => setIsPaletteOpen(true)} style={styles.paletteButton}>
-                        <Ionicons name="grid-outline" size={20} color={colors.text} />
+                        <Ionicons name="grid-outline" size={24} color={colors.text} />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -844,8 +945,13 @@ export const ExamScreen = () => {
                 </ScrollView>
             </View>
 
-            {/* Question Area */}
-            <ScrollView style={styles.questionContainer}>
+            {/* LAYER 2: Single Scrollable Container (Question + Options) */}
+            <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }}
+                showsVerticalScrollIndicator={true}
+            >
+                {/* Question Header */}
                 <View style={styles.questionHeader}>
                     <Text style={styles.questionNumber}>
                         Q{globalQuestionIndex + 1}.
@@ -858,10 +964,26 @@ export const ExamScreen = () => {
                     </View>
                 </View>
 
-                <MathText content={currentQuestion.question_text} style={styles.questionText} />
+                {/* Question Text - No fixed height, auto-expands */}
+                <View style={{ marginBottom: spacing.xl }}>
+                    <MathText
+                        content={currentQuestion.question_text}
+                        textColor={colors.text}
+                        fontSize={16}
+                        minHeight={60}
+                    />
+                </View>
 
-                {/* Question Types */}
-                <View style={styles.optionsContainer}>
+                {/* Divider for professional separation */}
+                <View style={{
+                    height: 1,
+                    backgroundColor: colors.border,
+                    marginBottom: spacing.lg,
+                    opacity: 0.5
+                }} />
+
+                {/* Options - In same scroll container */}
+                <View style={{ marginTop: spacing.md }}>
                     {currentQuestion.question_type === 'MCQ' && currentQuestion.options?.map((option: any) => {
                         const isSelected = responses[currentQuestion.id] === option.id;
                         return (
@@ -875,6 +997,7 @@ export const ExamScreen = () => {
                                     <MathText
                                         content={option.option_text}
                                         textColor={isSelected ? colors.primary : colors.text}
+                                        minHeight={40}
                                     />
                                 </View>
                             </TouchableOpacity>
@@ -902,6 +1025,7 @@ export const ExamScreen = () => {
                                     <MathText
                                         content={option.option_text}
                                         textColor={isSelected ? colors.primary : colors.text}
+                                        minHeight={40}
                                     />
                                 </View>
                             </TouchableOpacity>
@@ -921,7 +1045,7 @@ export const ExamScreen = () => {
                 </View>
             </ScrollView>
 
-            {/* Footer Navigation */}
+            {/* LAYER 3: Fixed Footer */}
             <View style={styles.examFooter}>
                 <View style={styles.navRow}>
                     <TouchableOpacity
@@ -933,20 +1057,29 @@ export const ExamScreen = () => {
                         <Text style={[styles.navText, globalQuestionIndex === 0 && styles.navTextDisabled]}>Prev</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity
-                        style={styles.reviewButton}
-                        onPress={() => setMarkedForReview(prev => ({
-                            ...prev,
-                            [currentQuestion.id]: !prev[currentQuestion.id]
-                        }))}
-                    >
-                        <Ionicons
-                            name={markedForReview[currentQuestion.id] ? "flag" : "flag-outline"}
-                            size={20}
-                            color={markedForReview[currentQuestion.id] ? colors.warning : colors.textSecondary}
-                        />
-                        <Text style={styles.reviewText}>Review</Text>
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', gap: spacing.md }}>
+                        {/* Clear Answer Button */}
+                        <TouchableOpacity
+                            style={[styles.reviewButton, !responses[currentQuestion.id] && { opacity: 0.5 }]}
+                            onPress={handleClearAnswer}
+                            disabled={!responses[currentQuestion.id]}
+                        >
+                            <Ionicons name="trash-outline" size={20} color={!responses[currentQuestion.id] ? colors.textDisabled : colors.error} />
+                            <Text style={[styles.reviewText, { color: !responses[currentQuestion.id] ? colors.textDisabled : colors.error }]}>Clear</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.reviewButton}
+                            onPress={() => handleToggleMarkForReview(currentQuestion.id)}
+                        >
+                            <Ionicons
+                                name={markedForReview[currentQuestion.id] ? "flag" : "flag-outline"}
+                                size={20}
+                                color={markedForReview[currentQuestion.id] ? colors.warning : colors.textSecondary}
+                            />
+                            <Text style={styles.reviewText}>Review</Text>
+                        </TouchableOpacity>
+                    </View>
 
                     {globalQuestionIndex < allQuestions.length - 1 ? (
                         <TouchableOpacity

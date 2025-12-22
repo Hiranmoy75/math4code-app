@@ -3,6 +3,7 @@
     "name": "math4code-app",
     "slug": "math4code-app",
     "version": "1.0.0",
+    "scheme": "math4code",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -30,7 +31,9 @@
     "extra": {
       "eas": {
         "projectId": "77dea67e-c141-462f-8b54-d11fa341340a"
-      }
+      },
+      "supabaseUrl": "https://pgmooiaxbythmnjtdavs.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBnbW9vaWF4Ynl0aG1uanRkYXZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYxNDgxMTMsImV4cCI6MjA4MTcyNDExM30.dpQsFPNCbh5N6fqxvr9HHAaO8hcZqISYdMHIbbamDHI"
     }
   }
 }
