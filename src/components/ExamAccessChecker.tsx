@@ -8,7 +8,7 @@ import { spacing, borderRadius } from '../constants/spacing';
 
 export interface ExamAccessStatus {
     accessible: boolean;
-    reason?: 'upcoming' | 'expired' | 'prerequisite' | 'accessible';
+    reason?: 'upcoming' | 'expired' | 'prerequisite' | 'placeholder' | 'accessible';
     message?: string;
     startTime?: Date;
     endTime?: Date;
@@ -427,6 +427,48 @@ export const ExamAccessChecker: React.FC<ExamAccessCheckerProps> = ({ status, on
                     <TouchableOpacity style={[styles.button, styles.buttonDisabled]} disabled>
                         <Text style={styles.buttonText}>Complete Task First</Text>
                     </TouchableOpacity>
+                </View>
+            </View>
+        );
+    }
+
+    // Placeholder exam (building/upcoming)
+    if (status.reason === 'placeholder') {
+        return (
+            <View style={styles.container}>
+                <View style={styles.card}>
+                    <View style={[styles.badge, { backgroundColor: colors.warning + '15', borderColor: colors.warning }]}>
+                        <Ionicons name="construct-outline" size={16} color={colors.warning} />
+                        <Text style={[styles.badgeText, { color: colors.warning }]}>COMING SOON</Text>
+                    </View>
+
+                    <View style={styles.iconContainer}>
+                        <Ionicons name="rocket" size={36} color={colors.warning} />
+                    </View>
+
+                    <Text style={styles.title}>Exam Coming Soon</Text>
+                    <Text style={styles.message}>
+                        {status.message || 'This exam is currently being prepared and will be available soon. Check back later!'}
+                    </Text>
+
+                    <View style={styles.detailRow}>
+                        <Ionicons name="information-circle-outline" size={22} color={colors.primary} />
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.detailLabel}>STATUS</Text>
+                            <Text style={styles.detailValue}>Under Development</Text>
+                        </View>
+                    </View>
+
+                    <TouchableOpacity style={[styles.button, styles.buttonDisabled]} disabled>
+                        <Ionicons name="hourglass-outline" size={18} color={colors.textInverse} />
+                        <Text style={styles.buttonText}>Exam Not Ready Yet</Text>
+                    </TouchableOpacity>
+
+                    <View style={styles.unlockText}>
+                        <Text style={styles.detailLabel}>
+                            🚀 STAY TUNED FOR UPDATES
+                        </Text>
+                    </View>
                 </View>
             </View>
         );

@@ -19,13 +19,14 @@ import { useExam } from '../hooks/useExam';
 import { supabase } from '../services/supabase';
 
 interface QuizLandingViewProps {
-    examId: string;
+    examId?: string;
+    lessonId?: string;
     title: string;
     description?: string;
     duration?: number;
 }
 
-export const QuizLandingView = ({ examId, title, description, duration }: QuizLandingViewProps) => {
+export const QuizLandingView = ({ examId, lessonId, title, description, duration }: QuizLandingViewProps) => {
     const navigation = useNavigation<any>();
     const { colors, shadows } = useAppTheme();
     const { exam, sections, fetchAttempts, checkExamEligibility } = useExam(examId);
@@ -42,13 +43,22 @@ export const QuizLandingView = ({ examId, title, description, duration }: QuizLa
             if (!user) return;
             setUserId(user.id);
 
-            const [attemptsData, eligibilityData] = await Promise.all([
-                fetchAttempts(user.id),
-                checkExamEligibility(user.id)
-            ]);
+            // Only fetch attempts and eligibility if examId exists
+            if (examId) {
+                const [attemptsData, eligibilityData] = await Promise.all([
+                    fetchAttempts(user.id),
+                    checkExamEligibility(user.id)
+                ]);
 
-            setAttempts(attemptsData || []);
-            setEligibility(eligibilityData);
+                setAttempts(attemptsData || []);
+                setEligibility(eligibilityData);
+            } else {
+                // If no examId, show placeholder message
+                setEligibility({
+                    eligible: false,
+                    message: 'This quiz is currently being prepared and will be available soon.'
+                });
+            }
         } catch (error) {
             console.error("Failed to load quiz data", error);
         } finally {
@@ -73,7 +83,10 @@ export const QuizLandingView = ({ examId, title, description, duration }: QuizLa
     };
 
     const handleStartExam = () => {
-        navigation.navigate('ExamScreen', { examId });
+        navigation.navigate('ExamScreen', {
+            examId: examId || undefined,
+            lessonId: lessonId || undefined
+        });
     };
 
     const handleViewResult = (attempt: any) => {
@@ -286,6 +299,58 @@ export const QuizLandingView = ({ examId, title, description, duration }: QuizLa
     const maxAttempts = exam?.max_attempts;
     const attemptsLeft = eligibility?.remainingAttempts;
     const isUnlimited = !maxAttempts;
+
+    // If no examId, show beautiful placeholder UI
+    if (!examId) {
+        return (
+            <ScrollView
+                style={styles.container}
+                contentContainerStyle={styles.contentContainer}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+            >
+                {/* Placeholder Card */}
+                <View style={styles.headerCard}>
+                    <LinearGradient
+                        colors={[colors.warning + '20', colors.warning + '10'] as any}
+                        style={styles.headerGradient}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                    >
+                        <View style={[styles.iconContainer, { backgroundColor: colors.warning + '20' }]}>
+                            <Ionicons name="rocket" size={48} color={colors.warning} />
+                        </View>
+                        <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
+                        {description && (
+                            <Text style={[styles.description, { color: colors.textSecondary }]}>{description}</Text>
+                        )}
+
+                        <View style={[styles.statsRow, { borderTopColor: colors.border, marginTop: spacing.xl }]}>
+                            <View style={{ alignItems: 'center', width: '100%' }}>
+                                <Ionicons name="construct-outline" size={24} color={colors.warning} />
+                                <Text style={[styles.statText, { color: colors.warning, fontWeight: '700', marginTop: spacing.sm, textAlign: 'center' }]}>
+                                    Quiz Under Development
+                                </Text>
+                                <Text style={[styles.description, { color: colors.textSecondary, marginTop: spacing.xs, fontSize: 12 }]}>
+                                    This quiz is being prepared and will be available soon
+                                </Text>
+                            </View>
+                        </View>
+                    </LinearGradient>
+                </View>
+
+                {/* Coming Soon Message */}
+                <View style={[styles.disabledButton, { marginTop: spacing.md }]}>
+                    <Ionicons name="time-outline" size={20} color={colors.textSecondary} style={{ marginBottom: spacing.xs }} />
+                    <Text style={styles.disabledButtonText}>
+                        {eligibility?.message || 'Coming Soon'}
+                    </Text>
+                    <Text style={[styles.description, { color: colors.textSecondary, marginTop: spacing.xs, fontSize: 12 }]}>
+                        🚀 Check back later for updates
+                    </Text>
+                </View>
+            </ScrollView>
+        );
+    }
 
     return (
         <ScrollView

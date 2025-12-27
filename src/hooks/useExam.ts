@@ -163,7 +163,7 @@ export const useExam = (examId?: string) => {
             .eq('exam_id', examId)
             .eq('student_id', studentId)
             .eq('status', 'in_progress')
-            .single();
+            .maybeSingle();
 
         if (existingAttempt) {
             return existingAttempt as ExamAttempt;
@@ -199,7 +199,7 @@ export const useExam = (examId?: string) => {
             .select('id')
             .eq('attempt_id', attemptId)
             .eq('question_id', questionId)
-            .single();
+            .maybeSingle();
 
         if (existingResponse) {
             const updateData: any = { student_answer: studentAnswer };
@@ -226,161 +226,58 @@ export const useExam = (examId?: string) => {
     };
 
     const submitAttempt = async ({ attemptId }: { attemptId: string }) => {
-        // Update attempt status
-        const { data: attempt, error: attemptError } = await supabase
+        // 1. Get attempt to know exam_id
+        const { data: attempt, error: attemptFetchError } = await supabase
             .from('exam_attempts')
-            .update({
-                status: 'submitted',
-                submitted_at: new Date().toISOString(),
-            })
+            .select('*')
             .eq('id', attemptId)
-            .select()
             .single();
 
-        if (attemptError) throw attemptError;
+        if (attemptFetchError) throw attemptFetchError;
 
-        // Generate results
-        try {
-            // Fetch exam details
-            const { data: examData, error: examError } = await supabase
-                .from('exams')
-                .select('id, total_marks')
-                .eq('id', attempt.exam_id)
-                .single();
+        // 2. Call the Secure RPC
+        // This handles result generation and status update on the server side
+        // avoiding RLS permissions issues for the 'results' table
+        const { data: resultData, error: rpcError } = await supabase
+            .rpc('submit_exam_attempt', {
+                p_attempt_id: attemptId,
+                p_exam_id: attempt.exam_id
+            });
 
-            if (examError) throw examError;
+        if (rpcError) {
+            // Handle duplicate submission gracefully
+            if (rpcError.message.includes("already submitted")) {
+                console.warn("Exam was already submitted.");
+                // Fetch existing result just to be safe/consistent
+                const { data: existing } = await supabase
+                    .from("results")
+                    .select("*")
+                    .eq("attempt_id", attemptId)
+                    .maybeSingle();
 
-            // Fetch all sections with questions and options
-            const { data: sections, error: sectionsError } = await supabase
-                .from('sections')
-                .select(`
-                    *,
-                    questions (
-                        *,
-                        options (*)
-                    )
-                `)
-                .eq('exam_id', attempt.exam_id)
-                .order('section_order', { ascending: true });
-
-            if (sectionsError) throw sectionsError;
-
-            // Fetch all responses for this attempt
-            const { data: responses, error: responsesError } = await supabase
-                .from('responses')
-                .select('*')
-                .eq('attempt_id', attemptId);
-
-            if (responsesError) throw responsesError;
-
-            // Create a map of responses for quick lookup
-            const responseMap = new Map(
-                (responses || []).map(r => [r.question_id, r.student_answer])
-            );
-
-            let totalObtainedMarks = 0;
-            const sectionResults: any[] = [];
-
-            // Calculate marks for each section
-            for (const section of sections) {
-                let sectionObtainedMarks = 0;
-                let correctAnswers = 0;
-                let wrongAnswers = 0;
-                let unanswered = 0;
-
-                for (const question of section.questions) {
-                    const studentAnswer = responseMap.get(question.id);
-
-                    if (!studentAnswer) {
-                        unanswered++;
-                        continue;
-                    }
-
-                    let isCorrect = false;
-
-                    if (question.question_type === 'MCQ') {
-                        // Single correct option
-                        const correctOption = question.options.find((opt: any) => opt.is_correct);
-                        isCorrect = studentAnswer === correctOption?.id;
-                    } else if (question.question_type === 'MSQ') {
-                        // Multiple correct options
-                        const correctOptionIds = question.options
-                            .filter((opt: any) => opt.is_correct)
-                            .map((opt: any) => opt.id)
-                            .sort();
-
-                        let studentOptionIds: string[] = [];
-                        try {
-                            studentOptionIds = JSON.parse(studentAnswer).sort();
-                        } catch {
-                            studentOptionIds = [studentAnswer];
-                        }
-
-                        isCorrect = JSON.stringify(correctOptionIds) === JSON.stringify(studentOptionIds);
-                    } else if (question.question_type === 'NAT') {
-                        // Numerical answer
-                        isCorrect = studentAnswer.trim() === question.correct_answer?.trim();
-                    }
-
-                    if (isCorrect) {
-                        sectionObtainedMarks += question.marks;
-                        correctAnswers++;
-                    } else {
-                        sectionObtainedMarks -= question.negative_marks || 0;
-                        wrongAnswers++;
-                    }
+                // If we have a result, we return the attempt logic as success
+                if (existing) {
+                    return attempt;
                 }
-
-                totalObtainedMarks += sectionObtainedMarks;
-
-                sectionResults.push({
-                    section_id: section.id,
-                    total_marks: section.total_marks,
-                    obtained_marks: Math.max(0, sectionObtainedMarks),
-                    correct_answers: correctAnswers,
-                    wrong_answers: wrongAnswers,
-                    unanswered: unanswered,
-                });
             }
-
-            // Ensure total marks don't go negative
-            totalObtainedMarks = Math.max(0, totalObtainedMarks);
-
-            // Calculate percentage
-            const percentage = (totalObtainedMarks / examData.total_marks) * 100;
-
-            // Insert result
-            const { data: result, error: resultError } = await supabase
-                .from('results')
-                .insert({
-                    attempt_id: attemptId,
-                    total_marks: examData.total_marks,
-                    obtained_marks: totalObtainedMarks,
-                    percentage: percentage,
-                })
-                .select()
-                .single();
-
-            if (resultError) throw resultError;
-
-            // Insert section results
-            const sectionResultsWithResultId = sectionResults.map(sr => ({
-                ...sr,
-                result_id: result.id,
-            }));
-
-            const { error: sectionResultsError } = await supabase
-                .from('section_results')
-                .insert(sectionResultsWithResultId);
-
-            if (sectionResultsError) throw sectionResultsError;
-
-        } catch (error) {
-            console.error('Error generating results:', error);
-            // Don't throw - attempt is already submitted
+            throw rpcError;
         }
 
-        return attempt;
+        // Check if RPC returned an error object inside JSON (custom error structure)
+        if (resultData && (resultData as any).error) {
+            throw new Error((resultData as any).error);
+        }
+
+        // Return updated attempt (refetch to get new status)
+        const { data: updatedAttempt, error: refreshError } = await supabase
+            .from('exam_attempts')
+            .select('*')
+            .eq('id', attemptId)
+            .single();
+
+        if (refreshError) throw refreshError;
+
+        return updatedAttempt;
     };
 
     const fetchExamResult = async (attemptId: string) => {

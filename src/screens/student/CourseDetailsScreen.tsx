@@ -329,6 +329,15 @@ export const CourseDetailsScreen = () => {
         };
     }, [refetch]);
 
+    // Auto-expand first module if not enrolled to show previews
+    useEffect(() => {
+        const modules = data?.modules;
+        const isEnrolled = data?.isEnrolled;
+        if (!isLoading && !isEnrolled && modules && modules.length > 0 && !expandedModuleId) {
+            setExpandedModuleId(modules[0].id);
+        }
+    }, [isLoading, data, expandedModuleId]);
+
     const toggleModule = (moduleId: string) => {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         setExpandedModuleId(expandedModuleId === moduleId ? null : moduleId);
@@ -371,7 +380,8 @@ export const CourseDetailsScreen = () => {
             }
         } catch (err: any) {
             console.error('Handle Buy Now Error:', err);
-            Alert.alert("Error", err.message || "Failed to initiate payment");
+            console.error('Error Details:', JSON.stringify(err, null, 2));
+            Alert.alert("Payment Error", err.message || "Failed to initiate payment. Please check your internet.");
         } finally {
             setIsBuying(false);
         }
@@ -410,22 +420,29 @@ export const CourseDetailsScreen = () => {
         const isVideo = lesson.content_type === 'video';
         const isPdf = lesson.content_type === 'pdf';
 
-        // Check if lesson is completed
         const lessonProgress = progressData?.lessons?.find(l => l.id === lesson.id);
         const isCompleted = lessonProgress?.completed || false;
+
+        // If it's a free preview and we are not enrolled (locked is passed as true but free preview overrides)
+        const isPreview = lesson.is_free_preview && !isEnrolled;
+        const finalIsLocked = isLocked && !isPreview;
 
         return (
             <TouchableOpacity
                 key={lesson.id}
-                style={[styles.lessonItem, isLocked && styles.lessonItemLocked]}
+                style={[
+                    styles.lessonItem,
+                    finalIsLocked && styles.lessonItemLocked,
+                    isPreview && { backgroundColor: '#F0FDF4' } // Light green bg for preview
+                ]}
                 onPress={() => {
-                    if (isLocked) {
+                    if (finalIsLocked) {
                         Alert.alert("Locked", "Please enroll in the course to access this lesson.");
                         return;
                     }
                     navigation.navigate('LessonPlayer', { courseId, lessonId: lesson.id });
                 }}
-                disabled={isLocked && !lesson.is_free_preview}
+                disabled={finalIsLocked}
             >
                 <View style={styles.lessonLeft}>
                     <View style={styles.iconContainer}>
@@ -437,28 +454,47 @@ export const CourseDetailsScreen = () => {
                             />
                         ) : (
                             <Ionicons
-                                name={isLocked ? "lock-closed-outline" : (isVideo ? "radio-outline" : "document-text-outline")}
+                                name={finalIsLocked ? "lock-closed-outline" : (isVideo ? "play-circle" : "document-text")}
                                 size={20}
-                                color={colors.textSecondary}
+                                color={isPreview ? colors.success : colors.textSecondary}
                             />
                         )}
                     </View>
                     <View style={styles.lessonInfo}>
-                        <Text style={styles.lessonTitle}>{lesson.title}</Text>
-                        {lesson.video_duration && (
-                            <Text style={styles.lessonMeta}>{lesson.video_duration} mins</Text>
-                        )}
-                        {isPdf && (
-                            <Text style={styles.lessonMeta}>PDF Document</Text>
-                        )}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <Text style={[styles.lessonTitle, isPreview && { color: colors.success, fontWeight: '600' }]}>
+                                {lesson.title}
+                            </Text>
+                            {isPreview && (
+                                <View style={{
+                                    backgroundColor: '#DCFCE7',
+                                    paddingHorizontal: 6,
+                                    paddingVertical: 2,
+                                    borderRadius: 4,
+                                    borderWidth: 1,
+                                    borderColor: '#86EFAC'
+                                }}>
+                                    <Text style={{ fontSize: 10, color: '#166534', fontWeight: 'bold' }}>PREVIEW</Text>
+                                </View>
+                            )}
+                        </View>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            {lesson.video_duration && (
+                                <Text style={styles.lessonMeta}>{lesson.video_duration} mins</Text>
+                            )}
+                            {isPdf && (
+                                <Text style={styles.lessonMeta}>PDF</Text>
+                            )}
+                        </View>
                     </View>
                 </View>
-                {!isLocked && (
+                {!finalIsLocked && (
                     <TouchableOpacity style={styles.actionButton}>
                         <Ionicons
                             name={isPdf ? "download-outline" : "play-circle-outline"}
                             size={24}
-                            color={colors.primary}
+                            color={isPreview ? colors.success : colors.primary}
                         />
                     </TouchableOpacity>
                 )}
@@ -666,6 +702,6 @@ export const CourseDetailsScreen = () => {
                     )}
                 </TouchableOpacity>
             </View>
-        </SafeAreaView>
+        </SafeAreaView >
     );
 };

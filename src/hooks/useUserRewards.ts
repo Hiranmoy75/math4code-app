@@ -38,6 +38,7 @@ export interface LeaderboardEntry {
     user_id: string;
     total_coins: number;
     xp: number;
+    weekly_xp: number;
     level: number;
     full_name: string;
     avatar_url: string;
@@ -111,16 +112,19 @@ export const useUserBadges = () => {
     });
 };
 
-export const useLeaderboard = (limit: number = 20) => {
+export const useLeaderboard = (type: 'weekly' | 'all_time' = 'all_time', limit: number = 20) => {
     return useQuery({
-        queryKey: ['leaderboard', limit],
+        queryKey: ['leaderboard', type, limit],
         queryFn: async () => {
+            // Determine sort column based on type
+            const sortColumn = type === 'weekly' ? 'weekly_xp' : 'total_coins';
+
             // 1. Get top rewards (fetch more to account for non-student filtering)
             const fetchLimit = limit * 3;
             const { data: rewards, error } = await supabase
                 .from('user_rewards')
                 .select('*')
-                .order('total_coins', { ascending: false })
+                .order(sortColumn, { ascending: false })
                 .limit(fetchLimit);
 
             if (error) throw error;
@@ -147,6 +151,7 @@ export const useLeaderboard = (limit: number = 20) => {
                     user_id: r.user_id,
                     total_coins: r.total_coins,
                     xp: r.xp,
+                    weekly_xp: r.weekly_xp,
                     level: r.level,
                     full_name: profileMap.get(r.user_id)?.full_name || 'Anonymous Student',
                     avatar_url: profileMap.get(r.user_id)?.avatar_url || '',
@@ -159,6 +164,7 @@ export const useLeaderboard = (limit: number = 20) => {
                 ...entry,
                 rank: index + 1
             })) as LeaderboardEntry[];
-        }
+        },
+        staleTime: 1000 * 60 * 5, // 5 minutes cache
     });
 };

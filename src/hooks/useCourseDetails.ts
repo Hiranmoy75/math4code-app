@@ -18,38 +18,37 @@ export const useCourseDetails = (courseId: string) => {
                 throw courseError;
             }
 
-            // 2. Fetch Modules
-            const { data: modulesData, error: modulesError } = await supabase
-                .from('modules')
-                .select('*')
-                .eq('course_id', courseId)
-                .order('module_order', { ascending: true });
+            // 2. Fetch Modules with Lessons (Try RPC first)
+            let modulesData: any[] = [];
 
-            if (modulesError) {
-                console.error('Error fetching modules:', modulesError);
-                throw modulesError;
+            const { data: rpcData, error: rpcError } = await supabase
+                .rpc('get_course_structure', { target_course_id: courseId });
+
+            if (!rpcError && rpcData) {
+                modulesData = rpcData;
+            } else {
+                console.log('RPC failed or empty, using fallback:', rpcError);
+                // Fallback: Direct Query
+                const { data: fallbackData, error: modulesError } = await supabase
+                    .from('modules')
+                    .select('*, lessons(*)')
+                    .eq('course_id', courseId)
+                    .order('module_order', { ascending: true });
+
+                if (modulesError) {
+                    console.error('Error fetching modules:', modulesError);
+                    throw modulesError;
+                }
+                modulesData = fallbackData || [];
             }
 
-            // 3. Fetch Lessons for all modules
-            const moduleIds = modulesData.map(m => m.id);
-            const { data: lessonsData, error: lessonsError } = await supabase
-                .from('lessons')
-                .select('*')
-                .in('module_id', moduleIds)
-                .order('lesson_order', { ascending: true });
-
-            if (lessonsError) {
-                console.error('Error fetching lessons:', lessonsError);
-                throw lessonsError;
-            }
-
-            // 4. Organize lessons into modules
-            const modulesWithLessons: Module[] = modulesData.map(module => ({
+            // 3. Process modules and sort lessons (RPC usually sorts, but safety check)
+            const modulesWithLessons: Module[] = modulesData.map((module: any) => ({
                 ...module,
-                lessons: lessonsData.filter(lesson => lesson.module_id === module.id),
+                lessons: (module.lessons || []).sort((a: Lesson, b: Lesson) => a.lesson_order - b.lesson_order),
             }));
 
-            // 5. Check Enrollment Status and Progress
+            // 4. Check Enrollment Status and Progress
             const { data: { user } } = await supabase.auth.getUser();
             let isEnrolled = false;
             let enrollmentProgress = 0;
@@ -61,7 +60,7 @@ export const useCourseDetails = (courseId: string) => {
                     .eq('user_id', user.id)
                     .eq('course_id', courseId)
                     .eq('status', 'active')
-                    .single();
+                    .maybeSingle();
 
                 isEnrolled = !!enrollment;
                 enrollmentProgress = enrollment?.progress_percentage || 0;

@@ -25,8 +25,21 @@ const { width } = Dimensions.get('window');
 export const LibraryScreen = () => {
     const navigation = useNavigation<any>();
     const { colors, shadows } = useAppTheme();
+    const [activeTab, setActiveTab] = useState<'courses' | 'test_series'>('courses');
 
     const { data: enrolledCourses, isLoading: loadingCourses, refetch: refetchCourses } = useEnrolledCourses();
+
+    // Filter courses based on active tab
+    const filteredCourses = React.useMemo(() => {
+        if (!enrolledCourses) return [];
+
+        return enrolledCourses.filter(course => {
+            const courseType = course.course_type || 'course'; // Default to 'course' if not set
+            return activeTab === 'courses'
+                ? courseType === 'course'
+                : courseType === 'test_series';
+        });
+    }, [enrolledCourses, activeTab]);
 
     // Auto-refresh when screen comes into focus
     useFocusEffect(
@@ -90,6 +103,33 @@ export const LibraryScreen = () => {
             paddingHorizontal: spacing.lg,
             paddingVertical: spacing.md,
             backgroundColor: colors.primary,
+        },
+        tabContainer: {
+            flexDirection: 'row',
+            backgroundColor: colors.surface,
+            paddingHorizontal: spacing.md,
+            paddingVertical: spacing.sm,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+        },
+        tab: {
+            flex: 1,
+            paddingVertical: spacing.sm,
+            alignItems: 'center',
+            borderBottomWidth: 2,
+            borderBottomColor: 'transparent',
+        },
+        activeTab: {
+            borderBottomColor: colors.primary,
+        },
+        tabText: {
+            ...textStyles.body,
+            color: colors.textSecondary,
+            fontWeight: '500',
+        },
+        activeTabText: {
+            color: colors.primary,
+            fontWeight: '700',
         },
         headerLeft: {
             flexDirection: 'row',
@@ -219,10 +259,30 @@ export const LibraryScreen = () => {
                 </View>
             </View>
 
+            {/* Tabs */}
+            <View style={styles.tabContainer}>
+                <TouchableOpacity
+                    style={[styles.tab, activeTab === 'courses' && styles.activeTab]}
+                    onPress={() => setActiveTab('courses')}
+                >
+                    <Text style={[styles.tabText, activeTab === 'courses' && styles.activeTabText]}>
+                        Courses
+                    </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={[styles.tab, activeTab === 'test_series' && styles.activeTab]}
+                    onPress={() => setActiveTab('test_series')}
+                >
+                    <Text style={[styles.tabText, activeTab === 'test_series' && styles.activeTabText]}>
+                        Test Series
+                    </Text>
+                </TouchableOpacity>
+            </View>
+
             {/* Content */}
             <View style={styles.content}>
                 <FlatList
-                    data={enrolledCourses}
+                    data={filteredCourses}
                     renderItem={renderCourseItem}
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.listContent}
@@ -233,12 +293,20 @@ export const LibraryScreen = () => {
                     ListEmptyComponent={
                         <View style={styles.emptyState}>
                             <Ionicons name="book-outline" size={64} color={colors.textSecondary} />
-                            <Text style={styles.emptyText}>No courses enrolled yet</Text>
+                            <Text style={styles.emptyText}>
+                                {activeTab === 'courses'
+                                    ? 'No courses enrolled yet'
+                                    : 'No test series enrolled yet'}
+                            </Text>
                             <TouchableOpacity
                                 style={styles.browseButton}
                                 onPress={() => navigation.navigate('CoursesTab')}
                             >
-                                <Text style={styles.browseButtonText}>Browse Courses</Text>
+                                <Text style={styles.browseButtonText}>
+                                    {activeTab === 'courses'
+                                        ? 'Browse Courses'
+                                        : 'Browse Test Series'}
+                                </Text>
                             </TouchableOpacity>
                         </View>
                     }

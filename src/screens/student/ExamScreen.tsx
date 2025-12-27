@@ -192,12 +192,45 @@ export const ExamScreen = () => {
                         }
                     }
                 } else {
+                    // Check if examId is missing (placeholder exam)
+                    if (!examId) {
+                        // Fetch lesson to check if it's a quiz type
+                        const { lessonId } = route.params;
+
+                        if (lessonId) {
+                            const { data: lesson } = await supabase
+                                .from('lessons')
+                                .select('content_type, exam_id')
+                                .eq('id', lessonId)
+                                .single();
+
+                            // Only show placeholder if content_type is 'quiz' and exam_id is null
+                            if (lesson?.content_type === 'quiz' && !lesson.exam_id) {
+                                setEligibilityStatus({
+                                    accessible: false,
+                                    reason: 'placeholder',
+                                    message: 'This quiz is currently being prepared and will be available soon. Check back later!'
+                                });
+                                setCheckingEligibility(false);
+                                return;
+                            }
+                        }
+
+                        // If not a quiz placeholder, show error
+                        setEligibilityStatus({
+                            accessible: false,
+                            message: 'Invalid exam configuration'
+                        });
+                        setCheckingEligibility(false);
+                        return;
+                    }
+
                     // Check eligibility for new attempt
                     const result = await checkExamEligibility(user.id);
                     if (!result.eligible) {
                         setEligibilityStatus({
                             accessible: false,
-                            reason: result.reason as 'upcoming' | 'expired' | 'prerequisite',
+                            reason: result.reason as 'upcoming' | 'expired' | 'prerequisite' | 'placeholder',
                             message: result.message,
                             startTime: result.startTime,
                             endTime: result.endTime
@@ -298,6 +331,22 @@ export const ExamScreen = () => {
             if (!user) return;
 
             const attempt = await startAttempt(user.id);
+
+            // Check if this is an existing attempt (resumed)
+            // If the attempt was created more than a few seconds ago, treat it as a resume
+            // Or simply if startAttempt returns an existing ID and we didn't have it before
+            // The robust way is to reload the screen with the attemptId to let useEffect sync state
+            const isResume = attempt.created_at && typeof attempt.created_at === 'string' && (new Date().getTime() - new Date(attempt.created_at).getTime() > 5000); // 5s threshold
+
+            if (isResume) {
+                // Reload screen with attemptId to trigger state restoration
+                navigation.replace('ExamScreen', {
+                    examId: exam?.id,
+                    attemptId: attempt.id
+                });
+                return;
+            }
+
             setCurrentAttempt(attempt);
             setTimeLeft(exam?.duration_minutes ? exam.duration_minutes * 60 : 0);
             setIsExamStarted(true);

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Toast from 'react-native-toast-message';
@@ -40,6 +40,31 @@ import { OnboardingScreen } from './src/screens/onboarding/OnboardingScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
+// 🚀 Performance: Remove console logs in production
+if (!__DEV__) {
+  console.log = () => { };
+  console.warn = () => { };
+  console.info = () => { };
+  // Keep console.error for crash reporting
+}
+
+const linking: LinkingOptions<RootStackParamList> = {
+  prefixes: [Linking.createURL('/'), 'math4code://', 'exp://'],
+  config: {
+    screens: {
+      Auth: {
+        screens: {
+          ResetPassword: 'reset-password',
+          Login: 'login',
+          Signup: 'signup',
+          ForgotPassword: 'forgot-password'
+        },
+      },
+      PaymentStatus: 'payment/:status',
+    },
+  },
+};
+
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -48,38 +73,57 @@ export default function App() {
 
   useEffect(() => {
     // Handle Deep Links for Auth (Google / Reset Password)
+    // Handle Deep Links for Auth (Google / Reset Password)
     const handleDeepLink = async (event: { url: string }) => {
       const { url } = event;
+      console.log('🔗 Deep Link Received:', url);
 
-      // Extract tokens from hash (Supabase default)
-      if (url.includes('access_token') && url.includes('refresh_token')) {
+      // Handle Supabase Auth Callback
+      // Scheme: math4code://auth/callback#access_token=...&refresh_token=...
+      // OR: exp://.../.../auth/callback#access_token=...
+      if (url.includes('auth/callback') || (url.includes('access_token') && url.includes('refresh_token'))) {
         try {
-          // Helper to parsing query params from hash
-          // Format: math4code://auth/callback#access_token=...&refresh_token=...
-          const hash = url.split('#')[1];
-          if (hash) {
-            const params = new URLSearchParams(hash);
+          // Extract hash or query params
+          // Supabase usually sends params in the hash for implicit flow
+          const hashIndex = url.indexOf('#');
+          const queryIndex = url.indexOf('?');
+
+          let paramsString = '';
+          if (hashIndex !== -1) {
+            paramsString = url.substring(hashIndex + 1);
+          } else if (queryIndex !== -1) {
+            paramsString = url.substring(queryIndex + 1);
+          }
+
+          if (paramsString) {
+            const params = new URLSearchParams(paramsString);
             const access_token = params.get('access_token');
             const refresh_token = params.get('refresh_token');
 
             if (access_token && refresh_token) {
+              console.log('✅ Found tokens in URL, setting session...');
               const { error } = await supabase.auth.setSession({
                 access_token,
                 refresh_token,
               });
 
               if (error) {
-                console.error("Error setting session from URL:", error);
+                console.error("❌ Error setting session from URL:", error);
+                Toast.show({
+                  type: 'error',
+                  text1: 'Authentication Failed',
+                  text2: error.message
+                });
                 return false;
               } else {
-                // Determine if authenticated immediately to prevent login screen flicker
+                console.log('✅ Session set successfully');
                 setIsAuthenticated(true);
                 return true;
               }
             }
           }
         } catch (e) {
-          console.error("Error parsing deep link:", e);
+          console.error("❌ Error parsing deep link:", e);
         }
       }
       return false;
@@ -167,24 +211,7 @@ export default function App() {
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
         <NavigationContainer
-          linking={{
-            prefixes: [Linking.createURL('/'), 'math4code://', 'exp://'],
-            config: {
-              screens: {
-                Auth: {
-                  screens: {
-                    ResetPassword: 'reset-password',
-                    Login: 'login',
-                    Signup: 'signup',
-                    ForgotPassword: 'forgot-password'
-                  },
-                },
-                PaymentStatus: 'payment/:status', // Handle /payment/success or /payment/failed
-                // If we want to handle it when logged in too (though unlikely for reset password flow)
-                // Main: { ... }
-              },
-            },
-          }}
+          linking={linking}
         >
           <Stack.Navigator screenOptions={{ headerShown: false }}>
             {isAuthenticated ? (

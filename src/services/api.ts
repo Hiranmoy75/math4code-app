@@ -36,7 +36,8 @@ export const api = {
                     callbackUrl: 'https://www.math4code.com/api/phonepe/callback',
                     deviceContext: {
                         deviceOS: Platform.OS
-                    }
+                    },
+                    isMobile: Platform.OS !== 'web'
                 }),
             });
 

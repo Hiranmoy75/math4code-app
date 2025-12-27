@@ -325,12 +325,13 @@ export const LessonPlayerScreen = () => {
     const renderContent = () => {
         // If it's a quiz, navigate to ExamScreen (handled in useEffect or render logic)
         // For now, we'll just show the QuizLandingView if it's a quiz type
-        if (currentLesson.content_type === 'quiz' && currentLesson.exam_id) {
-            // Auto-redirect logic is usually better, but if we want to show details first:
-            // For this implementation, let's assume we show the landing view
+        if (currentLesson.content_type === 'quiz') {
+            // Show QuizLandingView regardless of exam_id
+            // If exam_id is null, it will trigger placeholder UI in ExamScreen
             return (
                 <QuizLandingView
                     examId={currentLesson.exam_id}
+                    lessonId={currentLesson.id}
                     title={currentLesson.title}
                     description={currentLesson.description}
                 />

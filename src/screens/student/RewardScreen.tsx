@@ -16,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useUserRewards, useUserBadges, useRewardTransactions, useLeaderboard } from '../../hooks/useUserRewards';
+import { useDailyMissions } from '../../hooks/useDailyMissions';
 import { textStyles } from '../../constants/typography';
 import { spacing, borderRadius } from '../../constants/spacing';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -32,13 +33,15 @@ export const RewardScreen = () => {
 
     const [activeTab, setActiveTab] = useState('Missions');
     const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
+    const [leaderboardType, setLeaderboardType] = useState<'weekly' | 'all_time'>('all_time');
     const [currentDate, setCurrentDate] = useState(new Date());
 
     const { data: rewards } = useUserRewards();
     const { data: badges } = useUserBadges();
+    const { data: missions } = useDailyMissions();
     // Fetch enough history for calendar view
     const { data: transactions } = useRewardTransactions(100);
-    const { data: leaderboard } = useLeaderboard();
+    const { data: leaderboard } = useLeaderboard(leaderboardType);
 
     // Helper to get last 7 days including today
     const getLast7Days = () => {
@@ -171,13 +174,6 @@ export const RewardScreen = () => {
             </View>
         );
     };
-
-    // Mock Missions
-    const missions = [
-        { id: 'login', title: 'Daily Login', reward: 5, icon: 'flash', completed: true, progress: 1, total: 1 },
-        { id: 'video', title: 'Watch a Video', reward: 10, icon: 'play-circle', completed: false, progress: 0, total: 1 },
-        { id: 'quiz', title: 'Ace a Quiz', reward: 15, icon: 'school', completed: false, progress: 0, total: 1 },
-    ];
 
 
 
@@ -485,32 +481,66 @@ export const RewardScreen = () => {
             fontWeight: 'bold',
             color: colors.warning,
         },
+        leaderboardToggle: {
+            flex: 1,
+            paddingVertical: spacing.sm,
+            paddingHorizontal: spacing.md,
+            borderRadius: borderRadius.md,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+            alignItems: 'center',
+        },
+        leaderboardToggleActive: {
+            backgroundColor: colors.primary,
+            borderColor: colors.primary,
+        },
+        leaderboardToggleText: {
+            ...textStyles.bodySmall,
+            color: colors.textSecondary,
+            fontWeight: '600',
+        },
+        leaderboardToggleTextActive: {
+            color: colors.textInverse,
+        },
     });
 
     const renderMissions = () => (
         <View>
             <Text style={styles.sectionTitle}>Daily Missions</Text>
-            {missions.map((mission) => (
-                <View key={mission.id} style={styles.card}>
-                    <View style={[styles.iconBox, { backgroundColor: mission.completed ? colors.success + '20' : colors.surfaceAlt }]}>
-                        <Ionicons
-                            name={mission.completed ? "checkmark-circle" : mission.icon as any}
-                            size={24}
-                            color={mission.completed ? colors.success : colors.textSecondary}
-                        />
-                    </View>
-                    <View style={styles.cardContent}>
-                        <Text style={styles.cardTitle}>{mission.title}</Text>
-                        <View style={styles.progressBar}>
-                            <View style={[styles.progressFill, { width: mission.completed ? '100%' : '0%' }]} />
+            {missions && missions.length > 0 ? (
+                missions.map((mission) => {
+                    const progressPercent = mission.goal > 0 ? (mission.progress / mission.goal) * 100 : 0;
+                    return (
+                        <View key={mission.id} style={styles.card}>
+                            <View style={[styles.iconBox, { backgroundColor: mission.completed ? colors.success + '20' : colors.surfaceAlt }]}>
+                                <Ionicons
+                                    name={mission.completed ? "checkmark-circle" : mission.icon as any}
+                                    size={24}
+                                    color={mission.completed ? colors.success : colors.textSecondary}
+                                />
+                            </View>
+                            <View style={styles.cardContent}>
+                                <Text style={styles.cardTitle}>{mission.title}</Text>
+                                <Text style={styles.cardSubtitle}>
+                                    {mission.progress}/{mission.goal} completed
+                                </Text>
+                                <View style={styles.progressBar}>
+                                    <View style={[styles.progressFill, { width: `${Math.min(progressPercent, 100)}%` }]} />
+                                </View>
+                            </View>
+                            <View style={styles.rewardTag}>
+                                <Ionicons name="diamond" size={12} color={colors.warning} />
+                                <Text style={styles.rewardText}>+{mission.reward_coins}</Text>
+                            </View>
                         </View>
-                    </View>
-                    <View style={styles.rewardTag}>
-                        <Ionicons name="diamond" size={12} color={colors.warning} />
-                        <Text style={styles.rewardText}>+{mission.reward}</Text>
-                    </View>
+                    );
+                })
+            ) : (
+                <View style={styles.emptyState}>
+                    <Text style={styles.emptyText}>Loading missions...</Text>
                 </View>
-            ))}
+            )}
         </View>
     );
 
@@ -559,6 +589,38 @@ export const RewardScreen = () => {
 
     const renderLeaderboard = () => (
         <View style={styles.leaderboardContainer}>
+            {/* Toggle buttons for Weekly/All Time */}
+            <View style={{ flexDirection: 'row', marginBottom: spacing.md, gap: spacing.sm }}>
+                <TouchableOpacity
+                    style={[
+                        styles.leaderboardToggle,
+                        leaderboardType === 'all_time' && styles.leaderboardToggleActive
+                    ]}
+                    onPress={() => setLeaderboardType('all_time')}
+                >
+                    <Text style={[
+                        styles.leaderboardToggleText,
+                        leaderboardType === 'all_time' && styles.leaderboardToggleTextActive
+                    ]}>
+                        All Time
+                    </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={[
+                        styles.leaderboardToggle,
+                        leaderboardType === 'weekly' && styles.leaderboardToggleActive
+                    ]}
+                    onPress={() => setLeaderboardType('weekly')}
+                >
+                    <Text style={[
+                        styles.leaderboardToggleText,
+                        leaderboardType === 'weekly' && styles.leaderboardToggleTextActive
+                    ]}>
+                        This Week
+                    </Text>
+                </TouchableOpacity>
+            </View>
+
             {leaderboard?.map((entry, index) => {
                 const isCurrentUser = entry.user_id === user?.id;
                 let rankColor = colors.text;
@@ -615,7 +677,9 @@ export const RewardScreen = () => {
 
                         <View style={styles.scoreContainer}>
                             <Ionicons name="diamond" size={16} color={colors.warning} />
-                            <Text style={styles.scoreText}>{entry.total_coins}</Text>
+                            <Text style={styles.scoreText}>
+                                {leaderboardType === 'weekly' ? entry.weekly_xp : entry.total_coins}
+                            </Text>
                         </View>
                     </View>
                 );

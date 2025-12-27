@@ -37,18 +37,9 @@ export const LoginScreen = () => {
     // Status bar control - light background requires dark icons
     useStatusBar('#E8EAF6');
 
-    // Handle deep link redirect
-    useEffect(() => {
-        const handleDeepLink = async (event: { url: string }) => {
-            const { url } = event;
-            if (url.includes('access_token') || url.includes('refresh_token')) {
-                // Handled by App.tsx
-            }
-        };
-
-        const subscription = Linking.addEventListener('url', handleDeepLink);
-        return () => subscription.remove();
-    }, []);
+    // Deep link handling is centralized in App.tsx
+    // We don't need a local listener here unless we want to handle specific screen actions
+    // that App.tsx doesn't cover. For auth, App.tsx coverage is sufficient.
 
     const handleLogin = async () => {
         if (!email || !password) {

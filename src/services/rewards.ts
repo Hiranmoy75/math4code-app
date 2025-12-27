@@ -74,6 +74,17 @@ export const rewardService = {
         // 1. Check strict duplicate rules (Client-Side Protection)
         if (action === 'login') {
             entityId = today;
+
+            // FIX: Check user_rewards first as reward_transactions might be RLS blocked
+            const { data: userReward } = await supabase
+                .from("user_rewards")
+                .select("last_activity_date")
+                .eq("user_id", userId)
+                .single();
+
+            if (userReward?.last_activity_date === today) {
+                return { success: false, message: "Daily Reward Claimed!" };
+            }
         }
 
         if (entityId) {

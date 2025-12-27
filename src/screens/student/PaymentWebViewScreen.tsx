@@ -28,9 +28,28 @@ export const PaymentWebViewScreen = () => {
     const [isVerifying, setIsVerifying] = useState(false);
     const [browserResult, setBrowserResult] = useState<WebBrowser.WebBrowserResult | null>(null);
 
-    // Open WebBrowser immediately on mount
+    // Open WebBrowser immediately on mount and listen for deep links
     useEffect(() => {
         openPaymentBrowser();
+
+        // Listen for deep links (redirect from payment gateway)
+        const handleDeepLink = (event: { url: string }) => {
+            const url = event.url;
+            // Server redirects to: math4code://payment/verify?txnId=...&status=...
+            if (url && url.includes('payment/verify')) {
+                // Close the browser if it's open
+                WebBrowser.dismissBrowser();
+
+                // Auto-verify
+                handlePaymentVerification();
+            }
+        };
+
+        const subscription = Linking.addEventListener('url', handleDeepLink);
+
+        return () => {
+            subscription.remove();
+        };
     }, []);
 
     const openPaymentBrowser = async () => {

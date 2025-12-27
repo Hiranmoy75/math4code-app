@@ -14,7 +14,9 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "jsEngine": "hermes",
+      "bitcode": false
     },
     "android": {
       "adaptiveIcon": {
@@ -23,7 +25,10 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.math4codeapp"
+      "package": "com.math4code.app",
+      "jsEngine": "hermes",
+      "enableProguardInReleaseBuilds": true,
+      "enableShrinkResourcesInReleaseBuilds": true
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -32,8 +37,8 @@
       "eas": {
         "projectId": "77dea67e-c141-462f-8b54-d11fa341340a"
       },
-      "supabaseUrl": "https://pgmooiaxbythmnjtdavs.supabase.co",
-      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBnbW9vaWF4Ynl0aG1uanRkYXZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYxNDgxMTMsImV4cCI6MjA4MTcyNDExM30.dpQsFPNCbh5N6fqxvr9HHAaO8hcZqISYdMHIbbamDHI"
+      "supabaseUrl": "https://wzlcuzygjdzolcycogow.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6bGN1enlnamR6b2xjeWNvZ293Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY3NDc4MzMsImV4cCI6MjA4MjMyMzgzM30.wnsco6-dlGl4c1qUClZRLTikScX29sC3F0iPLK99c38"
     }
   }
 }

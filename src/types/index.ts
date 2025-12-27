@@ -1,4 +1,5 @@
 // Type definitions for the Math4Code mobile app
+import { NavigatorScreenParams } from '@react-navigation/native';
 
 export interface User {
     id: string;
@@ -26,6 +27,7 @@ export interface Course {
     is_enrolled?: boolean;
     progress_percentage?: number;
     completed_lessons?: number;
+    course_type?: 'course' | 'test_series';
 }
 
 export interface Module {
@@ -119,6 +121,7 @@ export interface Option {
 }
 
 export interface ExamAttempt {
+    created_at: boolean;
     id: string;
     exam_id: string;
     student_id: string;
@@ -251,8 +254,8 @@ export interface StudentStats {
 // Navigation types
 export type RootStackParamList = {
     Splash: undefined;
-    Auth: undefined;
-    Main: undefined;
+    Auth: NavigatorScreenParams<AuthStackParamList>;
+    Main: NavigatorScreenParams<StudentTabParamList>;
     CourseDetails: { courseId: string };
     LessonPlayer: { courseId: string; lessonId: string };
     ExamScreen: { examId: string; attemptId?: string };
@@ -267,6 +270,10 @@ export type RootStackParamList = {
     LegalPage: { type: 'privacy' | 'terms' | 'refund' };
     RewardScreen: undefined;
     ResetPassword: undefined;
+    Notifications: undefined;
+    EditProfile: undefined;
+    Settings: undefined;
+    HelpSupport: undefined;
 };
 
 export type AuthStackParamList = {
