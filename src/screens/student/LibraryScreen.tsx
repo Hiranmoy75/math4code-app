@@ -84,9 +84,6 @@ export const LibraryScreen = () => {
                         <Text style={styles.progressText}>{Math.round(item.progress_percentage || 0)}% Completed</Text>
                     </View>
                 </View>
-                <TouchableOpacity style={styles.moreButton}>
-                    <Ionicons name="ellipsis-vertical" size={20} color={colors.textSecondary} />
-                </TouchableOpacity>
             </View>
         </TouchableOpacity>
     );
@@ -163,7 +160,7 @@ export const LibraryScreen = () => {
             padding: spacing.md,
         },
         thumbnailContainer: {
-            width: 80,
+            width: 120,
             height: 80,
             borderRadius: borderRadius.lg,
             overflow: 'hidden',

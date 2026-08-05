@@ -19,7 +19,7 @@ import {
     Video,
     ResizeMode,
     AVPlaybackStatus,
-    FullscreenUpdate,
+    VideoFullscreenUpdate,
 } from "expo-av";
 import YoutubePlayer, { YoutubeIframeRef } from "react-native-youtube-iframe";
 import { LinearGradient } from "expo-linear-gradient";
@@ -43,10 +43,17 @@ const ytQualityOptions = ["auto", "small", "medium", "large", "hd720", "hd1080"]
 
 const isYouTube = (inputUrl: string) => {
     if (!inputUrl) return null;
-    const regExp =
-        /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-    const match = inputUrl.match(regExp);
-    return match && match[2].length === 11 ? match[2] : null;
+    const cleanUrl = inputUrl.trim();
+
+    // Check if it's just a raw ID (11 chars alphanumeric)
+    if (/^[a-zA-Z0-9_-]{11}$/.test(cleanUrl)) {
+        return cleanUrl;
+    }
+
+    // Simplified regex without greedy start
+    const regExp = /(?:youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|live\/|shorts\/)([^#&?]+)/;
+    const match = cleanUrl.match(regExp);
+    return match && match[1].length >= 11 ? match[1] : null;
 };
 
 const formatTime = (seconds: number) => {
@@ -281,13 +288,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     const onFullscreenUpdate = (event: { fullscreenUpdate: number }) => {
         if (
-            event.fullscreenUpdate === FullscreenUpdate.PLAYER_DID_PRESENT ||
-            event.fullscreenUpdate === FullscreenUpdate.PLAYER_WILL_PRESENT
+            event.fullscreenUpdate === VideoFullscreenUpdate.PLAYER_DID_PRESENT ||
+            event.fullscreenUpdate === VideoFullscreenUpdate.PLAYER_WILL_PRESENT
         ) {
             setIsFullscreen(true);
         } else if (
-            event.fullscreenUpdate === FullscreenUpdate.PLAYER_DID_DISMISS ||
-            event.fullscreenUpdate === FullscreenUpdate.PLAYER_WILL_DISMISS
+            event.fullscreenUpdate === VideoFullscreenUpdate.PLAYER_DID_DISMISS ||
+            event.fullscreenUpdate === VideoFullscreenUpdate.PLAYER_WILL_DISMISS
         ) {
             setIsFullscreen(false);
         }
@@ -586,6 +593,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             style={styles.container}
         >
             {/* VIDEO LAYER */}
+
+
+
+
             {youtubeId ? (
                 <View style={styles.videoWrapper}>
                     <YoutubePlayer
@@ -596,7 +607,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         videoId={youtubeId}
                         onReady={onYtReady}
                         onChangeState={onYtStateChange}
-                        onFullScreenChange={(fs) => setIsFullscreen(fs)}
+                        onFullScreenChange={(fs: any) => setIsFullscreen(fs)}
                         initialPlayerParams={{
                             controls: false, // no YouTube controls
                             modestbranding: true,
@@ -748,7 +759,8 @@ const styles = StyleSheet.create({
     controlsWrapper: {
         ...StyleSheet.absoluteFillObject,
         justifyContent: "space-between",
-        zIndex: 10,
+        zIndex: 100,
+        elevation: 100, // Android
     },
     topGradient: {
         paddingHorizontal: 14,
@@ -757,6 +769,8 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
+        zIndex: 101,
+        elevation: 101,
     },
     branding: {
         flexDirection: "row",
@@ -853,7 +867,8 @@ const styles = StyleSheet.create({
         position: "absolute",
         bottom: 80,
         right: 12,
-        zIndex: 30,
+        zIndex: 200,
+        elevation: 200,
     },
     menu: {
         backgroundColor: "rgba(15,23,42,0.96)",
@@ -885,7 +900,8 @@ const styles = StyleSheet.create({
         ...StyleSheet.absoluteFillObject,
         justifyContent: "center",
         alignItems: "center",
-        zIndex: 20,
+        zIndex: 90,
+        elevation: 90,
     },
     coverOverlay: {
         ...StyleSheet.absoluteFillObject,

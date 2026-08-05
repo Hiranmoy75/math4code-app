@@ -64,9 +64,23 @@ export const LoginScreen = () => {
     const handleGoogleLogin = async () => {
         setGoogleLoading(true);
         try {
-            // Linking.createURL handles both Expo Go (exp://) and standalone builds (math4code://)
-            const redirectUrl = Linking.createURL('/auth/callback');
-            console.log('OAuth Redirect URL:', redirectUrl); // Debug log
+            // Determine the redirect URL based on environment
+            // Web: window.location.origin (e.g. http://localhost:8081)
+            // Native: math4code://google-auth
+            let redirectUrl = Linking.createURL('google-auth');
+
+            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                redirectUrl = window.location.origin;
+            }
+
+            console.log('------------------------------------------------');
+            console.log('🚨 OAuth Redirect URL:', redirectUrl);
+            console.log('------------------------------------------------');
+
+            // DEBUG: Show URL to user (Native only)
+            // if (Platform.OS !== 'web') {
+            //    Alert.alert("Debug: Redirect URL", `Ensure this is in Supabase:\n\n${redirectUrl}`);
+            // }
 
             const { data, error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
@@ -78,16 +92,29 @@ export const LoginScreen = () => {
 
             if (error) throw error;
 
-            if (Platform.OS === 'web') return;
+            if (Platform.OS === 'web') return; // Web handles redirect automatically
 
             if (data?.url) {
-                const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+                // Open the auth session for Native
+                const result = await WebBrowser.openAuthSessionAsync(
+                    data.url,
+                    redirectUrl,
+                    {
+                        showInRecents: true,
+                    }
+                );
 
                 if (result.type === 'success' && result.url) {
-                    // Handled by deep link listener
+                    // On iOS, the result URL contains the params
+                    // On Android, we rely on the deep link listener in App.tsx
+                    // But openAuthSessionAsync might catch it too
+                    if (Platform.OS === 'ios') {
+                        // Parse params from result.url if needed
+                    }
                 }
             }
         } catch (error: any) {
+            console.error('Google Login Error:', error);
             Alert.alert('Google Login Error', error.message);
         } finally {
             setGoogleLoading(false);
@@ -209,24 +236,11 @@ export const LoginScreen = () => {
                             </Text>
                         </TouchableOpacity>
 
-                        {/* Apple Sign In */}
-                        <TouchableOpacity style={styles.socialButton}>
-                            <Ionicons name="logo-apple" size={24} color="#000" />
-                            <Text style={styles.socialButtonText}>Continue with Apple</Text>
-                        </TouchableOpacity>
-
                         {/* Footer Links */}
                         <View style={styles.footer}>
+                            <Text style={{ fontSize: 13, color: '#616161' }}>Don't have an account? </Text>
                             <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
-                                <Text style={styles.footerLink}>Create an account</Text>
-                            </TouchableOpacity>
-                            <Text style={styles.footerDivider}>  |  </Text>
-                            <TouchableOpacity>
-                                <Text style={styles.footerLink}>Privacy Policy</Text>
-                            </TouchableOpacity>
-                            <Text style={styles.footerDivider}>  |  </Text>
-                            <TouchableOpacity>
-                                <Text style={styles.footerLink}>Terms of Service</Text>
+                                <Text style={styles.footerLink}>Sign Up</Text>
                             </TouchableOpacity>
                         </View>
                     </BlurView>

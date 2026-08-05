@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../services/supabase';
+import { TENANT_ID } from '../utils/tenant';
 
 interface CourseUser {
     id: string;
@@ -18,6 +19,7 @@ export const useCourseUsers = (courseId: string | null) => {
                 .from('enrollments')
                 .select('user_id')
                 .eq('course_id', courseId)
+                .eq('tenant_id', TENANT_ID)
                 .eq('status', 'active');
 
             if (enrollError) throw enrollError;

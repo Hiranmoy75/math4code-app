@@ -1,1254 +1,509 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    TouchableOpacity,
-    ScrollView,
-    Alert,
-    ActivityIndicator,
-    BackHandler,
-    TextInput,
-    Modal,
-    Dimensions,
-    Platform,
-} from 'react-native';
-import Toast from 'react-native-toast-message';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { View, StyleSheet, ActivityIndicator, Alert, BackHandler, AppState, Platform, StatusBar } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import Toast from 'react-native-toast-message';
 import { useAppTheme } from '../../hooks/useAppTheme';
-import { textStyles } from '../../constants/typography';
-import { spacing, borderRadius } from '../../constants/spacing';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useExam } from '../../hooks/useExam';
-import { supabase } from '../../services/supabase';
-import { MathText } from '../../components/MathText';
-import { ConfirmationModal } from '../../components/ConfirmationModal';
-import { ExamAccessChecker, ExamAccessStatus } from '../../components/ExamAccessChecker';
-
-const { width } = Dimensions.get('window');
+import { QuestionDisplay } from '../../components/exam/QuestionDisplay';
+import { ExamTimer } from '../../components/exam/ExamTimer';
+import { QuestionPalette } from '../../components/exam/QuestionPalette';
+import { ConfirmDialog } from '../../components/common/ConfirmDialog';
+import { Ionicons } from '@expo/vector-icons';
+import { TouchableOpacity, Text } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export const ExamScreen = () => {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
     const { colors } = useAppTheme();
-    const { examId, attemptId } = route.params;
+    const { data: user, isLoading: isUserLoading } = useCurrentUser();
+    const params = route.params || {};
+    const { examId } = params;
 
-    const {
-        exam,
-        sections,
-        isLoading,
-        checkExamEligibility,
-        startAttempt,
-        saveResponse,
-        submitAttempt,
-        isSubmitting
-    } = useExam(examId);
+    // Safety check for deep linking or navigation errors
+    if (!examId) {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                <Text style={{ color: colors.error }}>Invalid Exam URL: Missing ID</Text>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 20 }}>
+                    <Text style={{ color: colors.primary }}>Go Back</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }
 
-    const [currentAttempt, setCurrentAttempt] = useState<any>(null);
-    const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
-    // Global question index across all sections
-    const [globalQuestionIndex, setGlobalQuestionIndex] = useState(0);
+    const { fetchSession, startAttempt, updateTimer, saveResponse, submitAttempt } = useExam(examId);
+    const { data: session, isLoading, refetch, error } = fetchSession(user?.id || '');
 
-    const [responses, setResponses] = useState<{ [key: string]: any }>({});
-    const [markedForReview, setMarkedForReview] = useState<{ [key: string]: boolean }>({});
-    const [visited, setVisited] = useState<{ [key: string]: boolean }>({});
-    const [timeLeft, setTimeLeft] = useState<number>(0);
-    const [isExamStarted, setIsExamStarted] = useState(false);
-    const [isPaletteOpen, setIsPaletteOpen] = useState(false);
-    const [checkingEligibility, setCheckingEligibility] = useState(true);
-    const [eligibilityStatus, setEligibilityStatus] = useState<ExamAccessStatus | null>(null);
-    const [remainingAttempts, setRemainingAttempts] = useState<number | null>(null);
-    const [pauseModalVisible, setPauseModalVisible] = useState(false);
-    const [submitModalVisible, setSubmitModalVisible] = useState(false);
+
+
+    if (error) {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                <Text style={{ color: 'red' }}>Error: {(error as any).message}</Text>
+            </View>
+        );
+    }
+
+    if (isUserLoading) {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={{ marginTop: 10, color: colors.text }}>Authenticating...</Text>
+            </View>
+        );
+    }
+
+    if (!user) {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background, padding: 20 }}>
+                <Ionicons name="lock-closed-outline" size={64} color={colors.textSecondary} />
+                <Text style={{ fontSize: 18, fontWeight: 'bold', color: colors.text, marginTop: 20 }}>Login Required</Text>
+                <Text style={{ textAlign: 'center', color: colors.textSecondary, marginTop: 10, marginBottom: 20 }}>
+                    Please log in to access this exam.
+                </Text>
+                <TouchableOpacity
+                    onPress={() => navigation.navigate('Auth', { screen: 'Login' })}
+                    style={{ backgroundColor: colors.primary, paddingHorizontal: 30, paddingVertical: 12, borderRadius: 8 }}
+                >
+                    <Text style={{ color: colors.textInverse, fontWeight: 'bold' }}>Go to Login</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }
+
+    // State
+    const [activeAttempt, setActiveAttempt] = useState<any>(null);
+    const [responses, setResponses] = useState<any>({});
+    const [marked, setMarked] = useState<any>({});
+    const [visited, setVisited] = useState<any>({});
+    const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);
+    const [paletteVisible, setPaletteVisible] = useState(false);
+    const [timeLeft, setTimeLeft] = useState(0);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isPaused, setIsPaused] = useState(false);
+    const [showPauseDialog, setShowPauseDialog] = useState(false);
 
     const timerRef = useRef<NodeJS.Timeout | null>(null);
+    const syncRef = useRef<number>(0);
 
-    // Flatten questions for easier global navigation
+    // Flat list of questions for easier navigation
     const allQuestions = useMemo(() => {
-        if (!sections) return [];
-        return sections.flatMap((section, sIndex) =>
-            section.questions?.map((q, qIndex) => ({
+        if (!session?.sections) return [];
+        return session.sections.flatMap((section: any, sIndex: any) =>
+            section.questions?.map((q: any, qIndex: any) => ({
                 ...q,
                 sectionId: section.id,
                 sectionIndex: sIndex,
-                sectionTitle: section.title,
                 localIndex: qIndex
             })) || []
         );
-    }, [sections]);
+    }, [session]);
 
-    // Sync Section Tab with Global Question Index
+    // Initialize Session
     useEffect(() => {
-        if (allQuestions.length > 0) {
-            const currentQ = allQuestions[globalQuestionIndex];
-            if (currentQ && currentQ.sectionIndex !== currentSectionIndex) {
-                setCurrentSectionIndex(currentQ.sectionIndex);
-            }
+        if (session && !activeAttempt && !isLoading) {
+            initExam();
         }
-    }, [globalQuestionIndex, allQuestions]);
+    }, [session, isLoading]);
 
-    // Check Eligibility and Load Attempt on Mount
-    useEffect(() => {
-        const check = async () => {
-            try {
-                const { data: { user } } = await supabase.auth.getUser();
-                if (!user) {
-                    Alert.alert("Error", "Please login to continue");
-                    navigation.goBack();
-                    return;
-                }
+    const initExam = async () => {
+        try {
+            // Already have an attempt from hook?
+            if (session?.activeAttempt) {
+                const attempt = session.activeAttempt;
+                setActiveAttempt(attempt);
+                setResponses(session.previousResponses || {});
 
-                // If resuming existing attempt
-                if (attemptId) {
-                    // Load existing attempt
-                    const { data: existingAttempt } = await supabase
-                        .from('exam_attempts')
-                        .select('*')
-                        .eq('id', attemptId)
-                        .single();
+                // Calculate time left with two modes
+                const totalDuration = (session.exam.duration_minutes || 60) * 60;
+                let remaining = 0;
 
-                    if (existingAttempt && existingAttempt.status === 'in_progress') {
-
-
-                        setCurrentAttempt(existingAttempt);
-                        setIsExamStarted(true);
-
-                        // Fetch exam duration to calculate remaining time
-                        const { data: examData, error: examError } = await supabase
-                            .from('exams')
-                            .select('duration_minutes')
-                            .eq('id', examId)
-                            .single();
-
-
-
-                        if (examData && examData.duration_minutes && existingAttempt.started_at) {
-                            // Calculate remaining time
-                            const startTime = new Date(existingAttempt.started_at).getTime();
-                            const currentTime = Date.now();
-                            const elapsedMilliseconds = currentTime - startTime;
-                            const elapsedSeconds = Math.floor(elapsedMilliseconds / 1000);
-                            const totalSeconds = examData.duration_minutes * 60;
-                            const remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds);
-
-
-
-
-
-
-
-
-
-
-
-
-                            if (remainingSeconds > 0) {
-                                setTimeLeft(remainingSeconds);
-
-                            } else {
-
-                                setTimeLeft(0);
-                                // Auto-submit if time expired
-                                setTimeout(() => {
-                                    handleSubmitExam(true);
-                                }, 1000);
-                            }
-                        } else {
-                            console.error('Missing exam data or started_at:', {
-                                examData,
-                                started_at: existingAttempt.started_at
-                            });
-                            // Fallback: set to full duration if data is missing
-                            if (examData?.duration_minutes) {
-                                setTimeLeft(examData.duration_minutes * 60);
-                            }
-                        }
-
-                        // Load existing responses
-                        const { data: savedResponses } = await supabase
-                            .from('responses')
-                            .select('question_id, student_answer, is_marked_for_review')
-                            .eq('attempt_id', attemptId);
-
-                        if (savedResponses) {
-                            const responsesMap: { [key: string]: any } = {};
-                            const reviewMap: { [key: string]: boolean } = {};
-                            const visitedMap: { [key: string]: boolean } = {};
-
-                            savedResponses.forEach((r: any) => {
-                                if (r.student_answer) {
-                                    responsesMap[r.question_id] = r.student_answer;
-                                    visitedMap[r.question_id] = true;
-                                }
-                                if (r.is_marked_for_review) {
-                                    reviewMap[r.question_id] = true;
-                                }
-                            });
-
-                            setResponses(responsesMap);
-                            setMarkedForReview(reviewMap);
-                            setVisited(visitedMap);
-                        }
+                if (session.exam.allow_pause === false) {
+                    // MODE 1: Deadline-based (pause not allowed)
+                    if (attempt.exam_deadline) {
+                        const deadline = new Date(attempt.exam_deadline).getTime();
+                        remaining = Math.max(0, (deadline - Date.now()) / 1000);
+                    } else {
+                        remaining = Math.max(0, totalDuration - (attempt.total_time_spent || 0));
                     }
                 } else {
-                    // Check if examId is missing (placeholder exam)
-                    if (!examId) {
-                        // Fetch lesson to check if it's a quiz type
-                        const { lessonId } = route.params;
+                    // MODE 2: Elapsed-based (pause allowed)
+                    const elapsed = attempt.elapsed_time_seconds || 0;
 
-                        if (lessonId) {
-                            const { data: lesson } = await supabase
-                                .from('lessons')
-                                .select('content_type, exam_id')
-                                .eq('id', lessonId)
-                                .single();
-
-                            // Only show placeholder if content_type is 'quiz' and exam_id is null
-                            if (lesson?.content_type === 'quiz' && !lesson.exam_id) {
-                                setEligibilityStatus({
-                                    accessible: false,
-                                    reason: 'placeholder',
-                                    message: 'This quiz is currently being prepared and will be available soon. Check back later!'
-                                });
-                                setCheckingEligibility(false);
-                                return;
-                            }
-                        }
-
-                        // If not a quiz placeholder, show error
-                        setEligibilityStatus({
-                            accessible: false,
-                            message: 'Invalid exam configuration'
-                        });
-                        setCheckingEligibility(false);
-                        return;
-                    }
-
-                    // Check eligibility for new attempt
-                    const result = await checkExamEligibility(user.id);
-                    if (!result.eligible) {
-                        setEligibilityStatus({
-                            accessible: false,
-                            reason: result.reason as 'upcoming' | 'expired' | 'prerequisite' | 'placeholder',
-                            message: result.message,
-                            startTime: result.startTime,
-                            endTime: result.endTime
+                    if (attempt.is_paused) {
+                        // Auto-resume from pause
+                        remaining = Math.max(0, totalDuration - elapsed);
+                        await updateTimer({
+                            attemptId: attempt.id,
+                            elapsedSeconds: elapsed,
+                            isPaused: false
                         });
                     } else {
-                        setEligibilityStatus({ accessible: true });
-                        setRemainingAttempts(result.remainingAttempts ?? null);
+                        // Active: elapsed + (now - last_activity)
+                        const lastActivity = attempt.last_activity_at
+                            ? new Date(attempt.last_activity_at).getTime()
+                            : Date.now();
+                        const currentSession = (Date.now() - lastActivity) / 1000;
+                        remaining = Math.max(0, totalDuration - (elapsed + currentSession));
                     }
                 }
-            } catch (error) {
-                console.error(error);
-                setEligibilityStatus({
-                    accessible: false,
-                    message: "Failed to load exam"
-                });
-            } finally {
-                setCheckingEligibility(false);
-            }
-        };
-        if (exam) {
-            check();
-        }
-    }, [exam, attemptId]);
 
-    // Prevent back button during exam
-    useEffect(() => {
-        const backAction = () => {
-            if (isExamStarted) {
-                if (Platform.OS === 'web') {
-                    if (window.confirm("Are you sure you want to exit? Your progress will be lost.")) {
-                        navigation.goBack();
-                        return true;
-                    }
-                    return true;
+                setTimeLeft(remaining);
+
+                if (remaining > 0) {
+                    startTimer();
+                } else {
+                    handleSubmit(true);
                 }
-                Alert.alert("Hold on!", "Are you sure you want to exit? Your progress will be lost.", [
-                    { text: "Cancel", onPress: () => null, style: "cancel" },
-                    { text: "YES", onPress: () => navigation.goBack() }
-                ]);
-                return true;
+            } else {
+                // New Attempt
+                const newAttempt = await startAttempt(user?.id || '');
+                setActiveAttempt(newAttempt);
+                setTimeLeft((session?.exam.duration_minutes || 60) * 60);
+                startTimer();
             }
-            return false;
-        };
-
-        const backHandler = BackHandler.addEventListener("hardwareBackPress", backAction);
-        return () => backHandler.remove();
-    }, [isExamStarted]);
-
-    // Timer Logic
-    useEffect(() => {
-        if (isExamStarted && timeLeft > 0) {
-            timerRef.current = setInterval(() => {
-                setTimeLeft((prev) => {
-                    if (prev <= 1) {
-                        clearInterval(timerRef.current!);
-                        handleSubmitExam(true); // Auto submit
-                        return 0;
-                    }
-                    return prev - 1;
-                });
-            }, 1000);
+        } catch (error: any) {
+            console.error(error);
+            Toast.show({ type: 'error', text1: 'Failed to start exam', text2: error.message });
+            navigation.goBack();
         }
-        return () => {
-            if (timerRef.current) clearInterval(timerRef.current);
-        };
-    }, [isExamStarted, timeLeft]);
-
-    const formatTime = (seconds: number) => {
-        const h = Math.floor(seconds / 3600);
-        const m = Math.floor((seconds % 3600) / 60);
-        const s = seconds % 60;
-        return `${h > 0 ? h + ':' : ''}${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
     };
 
-    const handleToggleMarkForReview = useCallback(async (questionId: string) => {
-        const newMarkedState = !markedForReview[questionId];
-        setMarkedForReview(prev => ({ ...prev, [questionId]: newMarkedState }));
+    // Timer Implementation
+    const startTimer = () => {
 
-        if (currentAttempt) {
-            try {
-                await saveResponse({
-                    attemptId: currentAttempt.id,
-                    questionId,
-                    answer: responses[questionId] || '',
-                    isMarkedForReview: newMarkedState
-                });
-            } catch (error) {
-                console.error("Failed to update mark for review", error);
-            }
+        setIsPaused(false);
+        if (timerRef.current) {
+            clearInterval(timerRef.current);
         }
-    }, [markedForReview, currentAttempt, responses, saveResponse]);
 
-    const handleStartExam = async () => {
-        if (!eligibilityStatus?.accessible) return;
+        timerRef.current = setInterval(() => {
+            setTimeLeft(prev => {
+                const newValue = prev - 1;
+
+                // Sync to DB every 30 seconds
+                syncRef.current += 1;
+                if (syncRef.current >= 30) {
+                    syncRef.current = 0;
+                    if (activeAttempt?.id) {
+                        // Calculate true elapsed
+                        const totalDuration = (session?.exam.duration_minutes || 60) * 60;
+                        const trueElapsed = totalDuration - newValue;
+                        updateTimer({ attemptId: activeAttempt.id, elapsedSeconds: trueElapsed })
+                            .catch(err => console.log('Ping failed', err));
+                    }
+                }
+
+                if (newValue <= 0) {
+
+                    clearInterval(timerRef.current!);
+                    handleSubmit(true); // Auto submit
+                    return 0;
+                }
+                return newValue;
+            });
+        }, 1000);
+        // console.log('[TIMER] Interval created:', timerRef.current);
+    };
+
+
+    const handlePause = () => {
+        if (!session?.exam.allow_pause) {
+            Toast.show({ type: 'info', text1: 'Pause not allowed for this exam' });
+            return;
+        }
+        setShowPauseDialog(true);
+    };
+
+    const confirmPause = async () => {
 
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
+            if (timerRef.current) clearInterval(timerRef.current);
 
-            const attempt = await startAttempt(user.id);
+            const totalDuration = (session?.exam.duration_minutes || 60) * 60;
+            const elapsed = totalDuration - timeLeft;
+            await updateTimer({
+                attemptId: activeAttempt.id,
+                elapsedSeconds: elapsed,
+                isPaused: true
+            });
 
-            // Check if this is an existing attempt (resumed)
-            // If the attempt was created more than a few seconds ago, treat it as a resume
-            // Or simply if startAttempt returns an existing ID and we didn't have it before
-            // The robust way is to reload the screen with the attemptId to let useEffect sync state
-            const isResume = attempt.created_at && typeof attempt.created_at === 'string' && (new Date().getTime() - new Date(attempt.created_at).getTime() > 5000); // 5s threshold
+            setShowPauseDialog(false);
 
-            if (isResume) {
-                // Reload screen with attemptId to trigger state restoration
-                navigation.replace('ExamScreen', {
-                    examId: exam?.id,
-                    attemptId: attempt.id
-                });
-                return;
-            }
-
-            setCurrentAttempt(attempt);
-            setTimeLeft(exam?.duration_minutes ? exam.duration_minutes * 60 : 0);
-            setIsExamStarted(true);
+            navigation.goBack();
         } catch (error) {
-            console.error(error);
-            Alert.alert("Error", "Failed to start exam");
+            console.error('[PAUSE] Error pausing exam:', error);
+            Toast.show({ type: 'error', text1: 'Failed to pause exam' });
+            setShowPauseDialog(false);
         }
     };
 
-    const handleAnswerChange = async (questionId: string, answer: any) => {
-        // Find the question and its section
-        const question = allQuestions.find(q => q.id === questionId);
-        if (question) {
-            const section = sections?.[question.sectionIndex];
+    const handleResume = async () => {
 
-            // Check Max Attempts Restriction
-            if (section?.max_questions_to_attempt) {
-                // Count current attempts in this section (excluding current question if already answered)
-                const currentSectionAttempts = allQuestions
-                    .filter(q => q.sectionIndex === question.sectionIndex)
-                    .filter(q => responses[q.id] !== undefined && responses[q.id] !== '' && q.id !== questionId)
-                    .length;
-
-                // If this is a NEW attempt (not modifying existing answer)
-                const isNewAttempt = !responses[questionId];
-
-                if (isNewAttempt && currentSectionAttempts >= section.max_questions_to_attempt) {
-                    Toast.show({
-                        type: 'error',
-                        text1: 'Section limit reached',
-                        text2: `You can attempt only ${section.max_questions_to_attempt} questions in this section`,
-                        visibilityTime: 3000,
-                    });
-                    return; // Block the attempt
-                }
-            }
-        }
-
-        setResponses(prev => ({ ...prev, [questionId]: answer }));
-        setVisited(prev => ({ ...prev, [questionId]: true }));
-
-        // Real-time save
-        if (currentAttempt) {
-            try {
-                await saveResponse({
-                    attemptId: currentAttempt.id,
-                    questionId,
-                    answer
+        try {
+            // Update database to mark as not paused
+            if (activeAttempt?.id) {
+                const totalDuration = (session?.exam.duration_minutes || 60) * 60;
+                const elapsed = totalDuration - timeLeft;
+                await updateTimer({
+                    attemptId: activeAttempt.id,
+                    elapsedSeconds: elapsed,
+                    isPaused: false
                 });
-            } catch (error) {
-                console.error("Failed to save response", error);
             }
+
+            // Update local state and restart timer
+            setIsPaused(false);
+            startTimer();
+
+        } catch (error) {
+            console.error('[RESUME] Error resuming exam:', error);
+            Toast.show({ type: 'error', text1: 'Failed to resume exam' });
         }
     };
 
-    const handleSubmitExam = async (autoSubmit = false) => {
-        if (!currentAttempt) {
-            Alert.alert("Error", "No active exam session found. Please refresh.");
+    // Navigation & Logic
+    const handleNext = () => {
+        if (activeQuestionIdx < allQuestions.length - 1) {
+            setActiveQuestionIdx(prev => prev + 1);
+            setVisited((prev: any) => ({ ...prev, [allQuestions[activeQuestionIdx + 1].id]: true }));
+        }
+    };
+
+    const handlePrev = () => {
+        if (activeQuestionIdx > 0) {
+            setActiveQuestionIdx(prev => prev - 1);
+        }
+    };
+
+    const handleSave = (qid: string, ans: any) => {
+        setResponses((prev: any) => ({ ...prev, [qid]: ans }));
+        // Debounce network save could go here, for now simple async fire-and-forget
+        if (activeAttempt) {
+            saveResponse({ attemptId: activeAttempt.id, questionId: qid, answer: ans });
+        }
+    };
+
+    const handleMark = (qid: string) => {
+        const newVal = !marked[qid];
+        setMarked((prev: any) => ({ ...prev, [qid]: newVal }));
+    };
+
+    // Submit Dialog State
+    const [showSubmitDialog, setShowSubmitDialog] = useState(false);
+
+    const handleSubmit = async (auto = false) => {
+
+
+        if (auto) {
+            performSubmit();
             return;
         }
 
+        setShowSubmitDialog(true);
+    };
+
+    const performSubmit = async () => {
+
+        setIsSubmitting(true);
+        if (timerRef.current) clearInterval(timerRef.current);
         try {
-            await submitAttempt({ attemptId: currentAttempt.id });
+            if (!activeAttempt?.id) throw new Error("No active attempt ID");
 
-            if (exam?.show_results_immediately) {
-                navigation.replace('ResultScreen', {
-                    attemptId: currentAttempt.id,
-                    examId: exam.id
-                });
-            } else {
-                if (Platform.OS === 'web') {
-                    window.alert("Exam submitted successfully!");
-                    navigation.goBack();
-                } else {
-                    Alert.alert("Success", "Exam submitted successfully!", [
-                        { text: "OK", onPress: () => navigation.goBack() }
-                    ]);
-                }
+            await submitAttempt({ attemptId: activeAttempt.id });
+
+            Toast.show({ type: 'success', text1: 'Exam Submitted Successfully' });
+            navigation.replace('ResultScreen', { attemptId: activeAttempt.id, examId: session?.exam.id });
+        } catch (error: any) {
+            console.error('Submission error:', error);
+            Toast.show({ type: 'error', text1: 'Submission Failed', text2: error.message });
+            setIsSubmitting(false);
+            // If manual submit failed, resume timer? Or keep paused? 
+            // Ideally keep user in exam screen to retry.
+        }
+    };
+
+    // Back Button Handling
+    useEffect(() => {
+        const backAction = () => {
+            if (isSubmitting) return true;
+            Alert.alert('Hold on!', 'Do you want to exit the exam? Timer will continue running.', [
+                {
+                    text: 'Cancel',
+                    onPress: () => null,
+                    style: 'cancel',
+                },
+                { text: 'YES', onPress: () => navigation.goBack() },
+            ]);
+            return true;
+        };
+
+        const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+        return () => backHandler.remove();
+    }, [isSubmitting]);
+
+    // App Background Handling
+    useEffect(() => {
+        const subscription = AppState.addEventListener('change', nextAppState => {
+            if (nextAppState.match(/inactive|background/) && activeAttempt && !isPaused) {
+                // If app mostly backgrounded, we might wanna pause if allowed?
+                // Or just let it run. Usually exams run in background.
+                // If pause allowed, maybe auto-pause? 
+                // Let's stick to manual pause for now to be safe.
             }
-        } catch (error) {
-            console.error(error);
-            Alert.alert("Error", "Failed to submit exam. Please try again.");
-        }
-    };
+        });
 
-    const confirmSubmit = () => {
-        // Validation: Check Required Attempts for each section
-        if (sections) {
-            for (const section of sections) {
-                if (section.required_attempts) {
-                    const sectionAttempts = allQuestions
-                        .filter(q => q.sectionIndex === section.section_order - 1) // Assuming section_order is 1-based, logical index is 0-based. Wait, allQuestions maps sectionIndex.
-                        // Let's rely on section.id matching
-                        .filter(q => q.sectionId === section.id)
-                        .filter(q => responses[q.id] !== undefined && responses[q.id] !== '')
-                        .length;
+        return () => {
+            subscription.remove();
+            // DON'T clear interval here - it breaks the timer!
+            // Interval is managed by startTimer/handlePause/performSubmit
+        };
+    }, [activeAttempt, isPaused]);
 
-                    if (sectionAttempts < section.required_attempts) {
-                        Toast.show({
-                            type: 'error',
-                            text1: 'Requirement not met',
-                            text2: `You must attempt at least ${section.required_attempts} questions in section "${section.title}"`,
-                            visibilityTime: 4000,
-                        });
-                        return;
-                    }
-                }
-            }
-        }
 
-        setSubmitModalVisible(true);
-    };
-
-    const jumpToSection = (sectionIndex: number) => {
-        // Find first question of this section
-        const firstQIndex = allQuestions.findIndex(q => q.sectionIndex === sectionIndex);
-        if (firstQIndex !== -1) {
-            setGlobalQuestionIndex(firstQIndex);
-            setCurrentSectionIndex(sectionIndex);
-        }
-    };
-
-    const styles = StyleSheet.create({
-        container: {
-            flex: 1,
-            backgroundColor: colors.background,
-        },
-        loadingContainer: {
-            flex: 1,
-            justifyContent: 'center',
-            alignItems: 'center',
-            backgroundColor: colors.background,
-        },
-        header: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            padding: spacing.md,
-            borderBottomWidth: 1,
-            borderBottomColor: colors.border,
-            backgroundColor: colors.surface,
-        },
-        backButton: {
-            padding: spacing.sm,
-        },
-        headerTitle: {
-            ...textStyles.h4,
-            flex: 1,
-            textAlign: 'center',
-            marginRight: 40,
-            color: colors.text,
-        },
-        content: {
-            flex: 1,
-            padding: spacing.lg,
-        },
-        examTitle: {
-            ...textStyles.h2,
-            marginBottom: spacing.md,
-            color: colors.text,
-        },
-        infoRow: {
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            marginBottom: spacing.xl,
-            gap: spacing.lg,
-        },
-        infoItem: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: spacing.xs,
-        },
-        infoText: {
-            ...textStyles.body,
-            color: colors.textSecondary,
-        },
-        sectionTitle: {
-            ...textStyles.h4,
-            marginBottom: spacing.sm,
-            color: colors.text,
-        },
-        instructionText: {
-            ...textStyles.body,
-            color: colors.textSecondary,
-            lineHeight: 24,
-        },
-        footer: {
-            padding: spacing.lg,
-            borderTopWidth: 1,
-            borderTopColor: colors.border,
-            backgroundColor: colors.surface,
-        },
-        primaryButton: {
-            backgroundColor: colors.primary,
-            padding: spacing.md,
-            borderRadius: borderRadius.lg,
-            alignItems: 'center',
-        },
-        disabledButton: {
-            backgroundColor: colors.textDisabled,
-        },
-        primaryButtonText: {
-            ...textStyles.button,
-            color: colors.textInverse,
-        },
-        errorBanner: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: colors.errorBg,
-            padding: spacing.md,
-            borderRadius: borderRadius.md,
-            marginBottom: spacing.lg,
-            gap: spacing.sm,
-        },
-        errorBannerText: {
-            ...textStyles.body,
-            color: colors.error,
-            flex: 1,
-        },
-        // Exam Interface Styles
-        examHeader: {
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: spacing.md,
-            backgroundColor: colors.surface,
-            borderBottomWidth: 1,
-            borderBottomColor: colors.border,
-        },
-        timerContainer: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: colors.primary,
-            paddingHorizontal: spacing.md,
-            paddingVertical: spacing.xs,
-            borderRadius: borderRadius.full,
-            gap: spacing.xs,
-        },
-        timerText: {
-            ...textStyles.body,
-            color: colors.textInverse,
-            fontWeight: 'bold',
-        },
-        timerTextWarning: {
-            color: colors.error,
-        },
-        headerRightButtons: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: spacing.sm,
-        },
-        pauseButton: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            padding: spacing.sm,
-            gap: spacing.xs,
-        },
-        pauseText: {
-            ...textStyles.button,
-            color: colors.text,
-        },
-        paletteButton: {
-            padding: spacing.sm,
-        },
-        sectionTabsContainer: {
-            backgroundColor: colors.surface,
-            borderBottomWidth: 1,
-            borderBottomColor: colors.border,
-        },
-        sectionTabsContent: {
-            paddingHorizontal: spacing.md,
-        },
-        sectionTab: {
-            paddingVertical: spacing.md,
-            paddingHorizontal: spacing.md,
-            borderBottomWidth: 2,
-            borderBottomColor: 'transparent',
-        },
-        sectionTabActive: {
-            borderBottomColor: colors.primary,
-        },
-        sectionTabText: {
-            ...textStyles.button,
-            color: colors.textSecondary,
-        },
-        sectionTabTextActive: {
-            color: colors.primary,
-        },
-        questionContainer: {
-            flex: 1,
-            padding: spacing.lg,
-        },
-        questionHeader: {
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            marginBottom: spacing.md,
-        },
-        questionNumber: {
-            ...textStyles.h4,
-            color: colors.primary,
-        },
-        marksContainer: {
-            flexDirection: 'row',
-            gap: spacing.sm,
-        },
-        marksText: {
-            ...textStyles.caption,
-            color: colors.success,
-            fontWeight: 'bold',
-        },
-        negativeMarksText: {
-            ...textStyles.caption,
-            color: colors.error,
-        },
-        questionText: {
-            marginBottom: spacing.xl,
-            color: colors.text,
-        },
-        optionsContainer: {
-            gap: spacing.md,
-            paddingBottom: spacing['2xl'],
-        },
-        optionButton: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            padding: spacing.md,
-            borderWidth: 1,
-            borderColor: colors.border,
-            borderRadius: borderRadius.md,
-            backgroundColor: colors.surface,
-        },
-        optionSelected: {
-            borderColor: colors.primary,
-            backgroundColor: colors.primaryLight + '20', // 20% opacity
-        },
-        radioCircle: {
-            width: 20,
-            height: 20,
-            borderRadius: 10,
-            borderWidth: 2,
-            borderColor: colors.textSecondary,
-            marginRight: spacing.md,
-        },
-        radioSelected: {
-            borderColor: colors.primary,
-            backgroundColor: colors.primary,
-        },
-        checkbox: {
-            width: 20,
-            height: 20,
-            borderRadius: 4,
-            borderWidth: 2,
-            borderColor: colors.textSecondary,
-            marginRight: spacing.md,
-            alignItems: 'center',
-            justifyContent: 'center',
-        },
-        checkboxSelected: {
-            borderColor: colors.primary,
-            backgroundColor: colors.primary,
-        },
-        optionText: {
-            ...textStyles.body,
-            flex: 1,
-            color: colors.text,
-        },
-        optionTextSelected: {
-            color: colors.primary,
-            fontWeight: 'bold',
-        },
-        natInput: {
-            borderWidth: 1,
-            borderColor: colors.border,
-            borderRadius: borderRadius.md,
-            padding: spacing.md,
-            fontSize: 16,
-            backgroundColor: colors.surface,
-            color: colors.text,
-        },
-        examFooter: {
-            padding: spacing.md,
-            backgroundColor: colors.surface,
-            borderTopWidth: 1,
-            borderTopColor: colors.border,
-        },
-        navRow: {
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-        },
-        navButton: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            padding: spacing.sm,
-            gap: spacing.xs,
-        },
-        navButtonDisabled: {
-            opacity: 0.5,
-        },
-        navText: {
-            ...textStyles.button,
-            color: colors.text,
-        },
-        navTextDisabled: {
-            color: colors.textDisabled,
-        },
-        reviewButton: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: spacing.xs,
-        },
-        reviewText: {
-            ...textStyles.caption,
-            color: colors.textSecondary,
-        },
-        submitButton: {
-            backgroundColor: colors.success,
-            paddingHorizontal: spacing.lg,
-            paddingVertical: spacing.sm,
-            borderRadius: borderRadius.md,
-        },
-        submitButtonText: {
-            ...textStyles.button,
-            color: colors.textInverse,
-        },
-        // Palette Modal
-        modalOverlay: {
-            flex: 1,
-            backgroundColor: colors.overlay,
-            justifyContent: 'flex-end',
-        },
-        paletteContainer: {
-            backgroundColor: colors.background,
-            borderTopLeftRadius: borderRadius.xl,
-            borderTopRightRadius: borderRadius.xl,
-            height: '70%',
-        },
-        paletteHeader: {
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: spacing.lg,
-            borderBottomWidth: 1,
-            borderBottomColor: colors.border,
-        },
-        paletteTitle: {
-            ...textStyles.h4,
-            color: colors.text,
-        },
-        paletteContent: {
-            padding: spacing.lg,
-        },
-        paletteGrid: {
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            gap: spacing.md,
-        },
-        paletteItem: {
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderWidth: 1,
-        },
-        paletteItemActive: {
-            borderColor: colors.primary,
-            borderWidth: 2,
-        },
-        paletteItemNotVisited: {
-            borderColor: colors.border,
-            backgroundColor: colors.surface,
-        },
-        paletteItemVisited: {
-            borderColor: colors.warning,
-            backgroundColor: colors.warningBg,
-        },
-        paletteItemAnswered: {
-            borderColor: colors.success,
-            backgroundColor: colors.success,
-        },
-        paletteItemMarked: {
-            borderColor: colors.primary,
-            backgroundColor: colors.primary,
-        },
-        paletteItemText: {
-            ...textStyles.caption,
-            color: colors.text,
-        },
-        paletteItemTextLight: {
-            color: colors.textInverse,
-        },
-        legendContainer: {
-            marginTop: spacing.xl,
-            gap: spacing.sm,
-        },
-        legendItem: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: spacing.md,
-        },
-        legendBox: {
-            width: 24,
-            height: 24,
-            borderRadius: 4,
-        },
-        legendText: {
-            ...textStyles.caption,
-            color: colors.textSecondary,
-        },
-    });
-
-    // Render Logic
-    if (isLoading || checkingEligibility || !exam) {
+    if (isLoading || !session) {
         return (
-            <View style={styles.loadingContainer}>
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
                 <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={{ marginTop: 10, color: colors.text }}>Loading Exam...</Text>
             </View>
         );
     }
 
-    if (!isExamStarted) {
-        // Show ExamAccessChecker if exam is not accessible
-        if (eligibilityStatus && !eligibilityStatus.accessible) {
-            return <ExamAccessChecker status={eligibilityStatus} onStartExam={handleStartExam} />;
-        }
-
+    if (isPaused) {
         return (
-            <SafeAreaView style={styles.container}>
-                <View style={styles.header}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                        <Ionicons name="close" size={24} color={colors.text} />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Exam Instructions</Text>
-                </View>
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background, gap: 20 }}>
+                <Ionicons name="pause-circle" size={80} color={colors.primary} />
+                <Text style={{ fontSize: 24, fontWeight: 'bold', color: colors.text }}>Exam Paused</Text>
+                <Text style={{ color: colors.textSecondary }}>Timer stopped at {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}</Text>
 
-                <ScrollView style={styles.content}>
-                    <Text style={styles.examTitle}>{exam.title}</Text>
-
-                    <View style={styles.infoRow}>
-                        <View style={styles.infoItem}>
-                            <Ionicons name="time-outline" size={20} color={colors.textSecondary} />
-                            <Text style={styles.infoText}>{exam.duration_minutes} mins</Text>
-                        </View>
-                        <View style={styles.infoItem}>
-                            <Ionicons name="help-circle-outline" size={20} color={colors.textSecondary} />
-                            <Text style={styles.infoText}>{exam.total_marks} Marks</Text>
-                        </View>
-                        {remainingAttempts !== Infinity && (
-                            <View style={styles.infoItem}>
-                                <Ionicons name="repeat-outline" size={20} color={colors.textSecondary} />
-                                <Text style={styles.infoText}>{remainingAttempts} Attempts Left</Text>
-                            </View>
-                        )}
-                    </View>
-
-                    <Text style={styles.sectionTitle}>Instructions:</Text>
-                    <Text style={styles.instructionText}>
-                        1. Read all questions carefully.{'\n'}
-                        2. You can navigate between questions using Next/Previous buttons.{'\n'}
-                        3. You can mark questions for review.{'\n'}
-                        4. The exam will auto-submit when the timer ends.{'\n'}
-                        {exam.negative_marking > 0 && `5. There is negative marking of ${exam.negative_marking} for wrong answers.\n`}
-                    </Text>
-                </ScrollView>
-
-                <View style={styles.footer}>
-                    <TouchableOpacity
-                        style={styles.primaryButton}
-                        onPress={handleStartExam}
-                    >
-                        <Text style={styles.primaryButtonText}>Start Exam</Text>
-                    </TouchableOpacity>
-                </View>
-            </SafeAreaView>
+                <TouchableOpacity
+                    onPress={handleResume}
+                    style={{ backgroundColor: colors.primary, paddingHorizontal: 40, paddingVertical: 15, borderRadius: 10 }}
+                >
+                    <Text style={{ color: '#white', fontWeight: 'bold', fontSize: 18 }}>Resume Exam</Text>
+                </TouchableOpacity>
+            </View>
         );
     }
 
-    const handlePauseExam = () => {
-        setPauseModalVisible(true);
-    };
+    const currentQ = allQuestions[activeQuestionIdx];
 
-    const currentQuestion = allQuestions[globalQuestionIndex];
-
-    if (!currentQuestion) return null;
-
-    const handleClearAnswer = async () => {
-        const questionId = currentQuestion.id;
-
-        // 1. Remove from local state
-        const newResponses = { ...responses };
-        delete newResponses[questionId];
-        setResponses(newResponses);
-
-        // 2. Save cleared state to backend
-        if (currentAttempt) {
-            try {
-                await saveResponse({
-                    attemptId: currentAttempt.id,
-                    questionId,
-                    answer: '', // Sending empty string to indicate cleared answer
-                });
-            } catch (error) {
-                console.error("Failed to clear response", error);
-            }
-        }
-    };
+    if (!currentQ) {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+                <Ionicons name="alert-circle-outline" size={48} color={colors.textSecondary} />
+                <Text style={{ marginTop: 10, color: colors.text }}>No questions available for this exam.</Text>
+            </View>
+        );
+    }
 
     return (
-        <SafeAreaView style={styles.container} edges={['top']}>
-            {/* ... Header ... */}
-            <View style={styles.examHeader}>
-                <View style={styles.timerContainer}>
-                    <Ionicons name="time" size={16} color={timeLeft < 300 ? colors.error : colors.textInverse} />
-                    <Text style={[styles.timerText, timeLeft < 300 && styles.timerTextWarning]}>
-                        {formatTime(timeLeft)}
-                    </Text>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
+            {/* Header */}
+            <View style={[styles.header, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
+                <TouchableOpacity onPress={() => setPaletteVisible(true)} style={styles.paletteButton}>
+                    <Ionicons name="grid-outline" size={24} color={colors.text} />
+                </TouchableOpacity>
+
+                <View style={{ flex: 1, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text }}>{session.exam.title}</Text>
                 </View>
 
-                <View style={styles.headerRightButtons}>
-                    <TouchableOpacity onPress={handlePauseExam} style={styles.pauseButton}>
-                        <Ionicons name="pause-circle-outline" size={24} color={colors.text} />
-                        <Text style={styles.pauseText}>Pause</Text>
+                {session.exam.allow_pause && (
+                    <TouchableOpacity onPress={handlePause} style={{ marginRight: 10 }}>
+                        <Ionicons name="pause-circle-outline" size={26} color={colors.text} />
                     </TouchableOpacity>
+                )}
 
-                    <TouchableOpacity onPress={() => setIsPaletteOpen(true)} style={styles.paletteButton}>
-                        <Ionicons name="grid-outline" size={24} color={colors.text} />
-                    </TouchableOpacity>
-                </View>
+                <ExamTimer timeLeft={timeLeft} />
             </View>
 
-            {/* Section Tabs */}
-            <View style={styles.sectionTabsContainer}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sectionTabsContent}>
-                    {sections?.map((section, index) => (
-                        <TouchableOpacity
-                            key={section.id}
-                            style={[styles.sectionTab, currentSectionIndex === index && styles.sectionTabActive]}
-                            onPress={() => jumpToSection(index)}
-                        >
-                            <Text style={[styles.sectionTabText, currentSectionIndex === index && styles.sectionTabTextActive]}>
-                                {section.title}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
-            </View>
-
-            {/* LAYER 2: Single Scrollable Container (Question + Options) */}
-            <ScrollView
-                style={{ flex: 1 }}
-                contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }}
-                showsVerticalScrollIndicator={true}
-            >
-                {/* Question Header */}
-                <View style={styles.questionHeader}>
-                    <Text style={styles.questionNumber}>
-                        Q{globalQuestionIndex + 1}.
-                    </Text>
-                    <View style={styles.marksContainer}>
-                        <Text style={styles.marksText}>+{currentQuestion.marks}</Text>
-                        {currentQuestion.negative_marks > 0 && (
-                            <Text style={styles.negativeMarksText}>-{currentQuestion.negative_marks}</Text>
-                        )}
-                    </View>
-                </View>
-
-                {/* Question Text - No fixed height, auto-expands */}
-                <View style={{ marginBottom: spacing.xl }}>
-                    <MathText
-                        content={currentQuestion.question_text}
-                        textColor={colors.text}
-                        fontSize={16}
-                        minHeight={60}
-                    />
-                </View>
-
-                {/* Divider for professional separation */}
-                <View style={{
-                    height: 1,
-                    backgroundColor: colors.border,
-                    marginBottom: spacing.lg,
-                    opacity: 0.5
-                }} />
-
-                {/* Options - In same scroll container */}
-                <View style={{ marginTop: spacing.md }}>
-                    {currentQuestion.question_type === 'MCQ' && currentQuestion.options?.map((option: any) => {
-                        const isSelected = responses[currentQuestion.id] === option.id;
-                        return (
-                            <TouchableOpacity
-                                key={option.id}
-                                style={[styles.optionButton, isSelected && styles.optionSelected]}
-                                onPress={() => handleAnswerChange(currentQuestion.id, option.id)}
-                            >
-                                <View style={[styles.radioCircle, isSelected && styles.radioSelected]} />
-                                <View style={{ flex: 1 }}>
-                                    <MathText
-                                        content={option.option_text}
-                                        textColor={isSelected ? colors.primary : colors.text}
-                                        minHeight={40}
-                                    />
-                                </View>
-                            </TouchableOpacity>
-                        );
-                    })}
-
-                    {currentQuestion.question_type === 'MSQ' && currentQuestion.options?.map((option: any) => {
-                        const currentAnswers = (responses[currentQuestion.id] || []) as string[];
-                        const isSelected = currentAnswers.includes(option.id);
-                        return (
-                            <TouchableOpacity
-                                key={option.id}
-                                style={[styles.optionButton, isSelected && styles.optionSelected]}
-                                onPress={() => {
-                                    const newAnswers = isSelected
-                                        ? currentAnswers.filter(id => id !== option.id)
-                                        : [...currentAnswers, option.id];
-                                    handleAnswerChange(currentQuestion.id, newAnswers);
-                                }}
-                            >
-                                <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                                    {isSelected && <Ionicons name="checkmark" size={14} color={colors.textInverse} />}
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <MathText
-                                        content={option.option_text}
-                                        textColor={isSelected ? colors.primary : colors.text}
-                                        minHeight={40}
-                                    />
-                                </View>
-                            </TouchableOpacity>
-                        );
-                    })}
-
-                    {currentQuestion.question_type === 'NAT' && (
-                        <TextInput
-                            style={styles.natInput}
-                            placeholder="Enter your numerical answer"
-                            placeholderTextColor={colors.textSecondary}
-                            keyboardType="numeric"
-                            value={responses[currentQuestion.id] || ''}
-                            onChangeText={(text) => handleAnswerChange(currentQuestion.id, text)}
-                        />
-                    )}
-                </View>
-            </ScrollView>
-
-            {/* LAYER 3: Fixed Footer */}
-            <View style={styles.examFooter}>
-                <View style={styles.navRow}>
-                    <TouchableOpacity
-                        style={[styles.navButton, globalQuestionIndex === 0 && styles.navButtonDisabled]}
-                        disabled={globalQuestionIndex === 0}
-                        onPress={() => setGlobalQuestionIndex(prev => prev - 1)}
-                    >
-                        <Ionicons name="chevron-back" size={24} color={globalQuestionIndex === 0 ? colors.textDisabled : colors.text} />
-                        <Text style={[styles.navText, globalQuestionIndex === 0 && styles.navTextDisabled]}>Prev</Text>
-                    </TouchableOpacity>
-
-                    <View style={{ flexDirection: 'row', gap: spacing.md }}>
-                        {/* Clear Answer Button */}
-                        <TouchableOpacity
-                            style={[styles.reviewButton, !responses[currentQuestion.id] && { opacity: 0.5 }]}
-                            onPress={handleClearAnswer}
-                            disabled={!responses[currentQuestion.id]}
-                        >
-                            <Ionicons name="trash-outline" size={20} color={!responses[currentQuestion.id] ? colors.textDisabled : colors.error} />
-                            <Text style={[styles.reviewText, { color: !responses[currentQuestion.id] ? colors.textDisabled : colors.error }]}>Clear</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={styles.reviewButton}
-                            onPress={() => handleToggleMarkForReview(currentQuestion.id)}
-                        >
-                            <Ionicons
-                                name={markedForReview[currentQuestion.id] ? "flag" : "flag-outline"}
-                                size={20}
-                                color={markedForReview[currentQuestion.id] ? colors.warning : colors.textSecondary}
-                            />
-                            <Text style={styles.reviewText}>Review</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {globalQuestionIndex < allQuestions.length - 1 ? (
-                        <TouchableOpacity
-                            style={styles.navButton}
-                            onPress={() => setGlobalQuestionIndex(prev => prev + 1)}
-                        >
-                            <Text style={styles.navText}>Next</Text>
-                            <Ionicons name="chevron-forward" size={24} color={colors.text} />
-                        </TouchableOpacity>
-                    ) : (
-                        <TouchableOpacity
-                            style={styles.submitButton}
-                            onPress={confirmSubmit}
-                            disabled={isSubmitting}
-                        >
-                            {isSubmitting ? (
-                                <ActivityIndicator color="#fff" />
-                            ) : (
-                                <Text style={styles.submitButtonText}>Submit</Text>
-                            )}
-                        </TouchableOpacity>
-                    )}
-                </View>
-            </View>
-
-            {/* Question Palette Modal */}
-            <Modal
-                visible={isPaletteOpen}
-                animationType="slide"
-                transparent={true}
-                onRequestClose={() => setIsPaletteOpen(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.paletteContainer}>
-                        <View style={styles.paletteHeader}>
-                            <Text style={styles.paletteTitle}>Question Palette</Text>
-                            <TouchableOpacity onPress={() => setIsPaletteOpen(false)}>
-                                <Ionicons name="close" size={24} color={colors.text} />
-                            </TouchableOpacity>
-                        </View>
-                        <ScrollView style={styles.paletteContent}>
-                            <View style={styles.paletteGrid}>
-                                {allQuestions.map((q, index) => {
-                                    const isAnswered = responses[q.id] !== undefined && responses[q.id] !== '' && (Array.isArray(responses[q.id]) ? responses[q.id].length > 0 : true);
-                                    const isMarked = markedForReview[q.id];
-                                    const isVisited = visited[q.id];
-
-                                    let statusStyle = styles.paletteItemNotVisited;
-                                    if (isMarked) statusStyle = styles.paletteItemMarked;
-                                    else if (isAnswered) statusStyle = styles.paletteItemAnswered;
-                                    else if (isVisited) statusStyle = styles.paletteItemVisited;
-
-                                    return (
-                                        <TouchableOpacity
-                                            key={q.id}
-                                            style={[styles.paletteItem, statusStyle, globalQuestionIndex === index && styles.paletteItemActive]}
-                                            onPress={() => {
-                                                setGlobalQuestionIndex(index);
-                                                setIsPaletteOpen(false);
-                                            }}
-                                        >
-                                            <Text style={[styles.paletteItemText, (isAnswered || isMarked) && styles.paletteItemTextLight]}>
-                                                {index + 1}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    );
-                                })}
-                            </View>
-
-                            {/* Legend */}
-                            <View style={styles.legendContainer}>
-                                <View style={styles.legendItem}>
-                                    <View style={[styles.paletteItem, styles.paletteItemAnswered, styles.legendBox]} />
-                                    <Text style={styles.legendText}>Answered</Text>
-                                </View>
-                                <View style={styles.legendItem}>
-                                    <View style={[styles.paletteItem, styles.paletteItemMarked, styles.legendBox]} />
-                                    <Text style={styles.legendText}>Marked</Text>
-                                </View>
-                                <View style={styles.legendItem}>
-                                    <View style={[styles.paletteItem, styles.paletteItemVisited, styles.legendBox]} />
-                                    <Text style={styles.legendText}>Visited</Text>
-                                </View>
-                                <View style={styles.legendItem}>
-                                    <View style={[styles.paletteItem, styles.paletteItemNotVisited, styles.legendBox]} />
-                                    <Text style={styles.legendText}>Not Visited</Text>
-                                </View>
-                            </View>
-                        </ScrollView>
-                    </View>
-                </View>
-            </Modal>
-
-            <ConfirmationModal
-                visible={pauseModalVisible}
-                title="Pause Exam"
-                message={"Are you sure you want to stop for now? You can resume later from where you left off.\n\nNote: The timer will continue running."}
-                onConfirm={() => {
-                    setPauseModalVisible(false);
-                    navigation.goBack();
-                }}
-                onCancel={() => setPauseModalVisible(false)}
-                confirmText="Pause & Exit"
-                type="warning"
-                icon="pause-circle"
+            {/* Content */}
+            <QuestionDisplay
+                question={currentQ}
+                activeQuestionIdx={activeQuestionIdx}
+                totalQuestions={allQuestions.length}
+                response={responses[currentQ?.id]}
+                isMarked={!!marked[currentQ?.id]}
+                onSave={handleSave}
+                onMark={handleMark}
+                onNext={handleNext}
+                onPrev={handlePrev}
+                onClear={() => handleSave(currentQ.id, '')}
+                onSubmit={() => handleSubmit(false)}
+                isFirst={activeQuestionIdx === 0}
+                isLast={activeQuestionIdx === allQuestions.length - 1}
             />
 
-            <ConfirmationModal
-                visible={submitModalVisible}
-                title="Submit Exam"
-                message={`You have answered ${Object.keys(responses).length} out of ${allQuestions.length} questions.\nAre you sure you want to submit?`}
-                onConfirm={() => {
-                    setSubmitModalVisible(false);
-                    handleSubmitExam(false);
+            {/* Palette Modal */}
+            <QuestionPalette
+                visible={paletteVisible}
+                onClose={() => setPaletteVisible(false)}
+                questions={allQuestions}
+                sections={session.sections}
+                responses={responses}
+                markedForReview={marked}
+                visited={visited}
+                activeQuestionIdx={activeQuestionIdx}
+                onSelectQuestion={idx => {
+                    setActiveQuestionIdx(idx);
+                    setVisited((prev: any) => ({ ...prev, [allQuestions[idx].id]: true }));
                 }}
-                onCancel={() => setSubmitModalVisible(false)}
-                confirmText="Submit"
-                type="success"
-                icon="checkmark-circle"
+                onSubmit={() => handleSubmit(false)}
+            />
+
+            {/* Overlay Loader for submission */}
+            {isSubmitting && (
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', zIndex: 999 }]}>
+                    <ActivityIndicator size="large" color="#FFF" />
+                    <Text style={{ color: '#FFF', marginTop: 10, fontWeight: 'bold' }}>Submitting...</Text>
+                </View>
+            )}
+            {/* Submit Confirmation Dialog */}
+            <ConfirmDialog
+                visible={showSubmitDialog}
+                title="Submit Exam?"
+                message={`You have answered ${Object.keys(responses).length} out of ${allQuestions.length} questions.\n\nAre you sure you want to finish the exam?`}
+                confirmText="Submit Exam"
+                cancelText="Keep Working"
+                confirmColor={colors.error}
+                icon="alert-circle"
+                onConfirm={() => {
+                    setShowSubmitDialog(false);
+                    performSubmit();
+                }}
+                onCancel={() => setShowSubmitDialog(false)}
+            />
+
+            {/* Pause Confirmation Dialog */}
+            <ConfirmDialog
+                visible={showPauseDialog}
+                title="Pause Exam?"
+                message="Are you sure you want to pause the exam? You can resume later from where you left off."
+                confirmText="Yes, Pause"
+                cancelText="Continue Exam"
+                confirmColor={colors.warning}
+                icon="pause-circle"
+                onConfirm={confirmPause}
+                onCancel={() => setShowPauseDialog(false)}
             />
         </SafeAreaView>
     );
 };
+
+const styles = StyleSheet.create({
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        elevation: 2,
+    },
+    paletteButton: {
+        marginRight: 10,
+    }
+});

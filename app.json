@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "math4code-app",
+    "name": "Math4Code",
     "slug": "math4code-app",
     "version": "1.0.0",
     "scheme": "math4code",
@@ -11,12 +11,16 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#1E293B"
     },
     "ios": {
       "supportsTablet": true,
       "jsEngine": "hermes",
-      "bitcode": false
+      "bitcode": false,
+      "associatedDomains": [
+        "applinks:www.math4code.com",
+        "applinks:math4code.com"
+      ]
     },
     "android": {
       "adaptiveIcon": {
@@ -28,7 +32,45 @@
       "package": "com.math4code.app",
       "jsEngine": "hermes",
       "enableProguardInReleaseBuilds": true,
-      "enableShrinkResourcesInReleaseBuilds": true
+      "enableShrinkResourcesInReleaseBuilds": true,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "www.math4code.com",
+              "pathPrefix": "/courses"
+            },
+            {
+              "scheme": "https",
+              "host": "math4code.com",
+              "pathPrefix": "/courses"
+            },
+            {
+              "scheme": "https",
+              "host": "www.math4code.com",
+              "pathPrefix": "/course"
+            },
+            {
+              "scheme": "https",
+              "host": "math4code.com",
+              "pathPrefix": "/course"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
+      ],
+      "privacyPolicy": "https://www.math4code.com/privacy-policy",
+      "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -38,7 +80,12 @@
         "projectId": "77dea67e-c141-462f-8b54-d11fa341340a"
       },
       "supabaseUrl": "https://wzlcuzygjdzolcycogow.supabase.co",
-      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6bGN1enlnamR6b2xjeWNvZ293Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY3NDc4MzMsImV4cCI6MjA4MjMyMzgzM30.wnsco6-dlGl4c1qUClZRLTikScX29sC3F0iPLK99c38"
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6bGN1enlnamR6b2xjeWNvZ293Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY3NDc4MzMsImV4cCI6MjA4MjMyMzgzM30.wnsco6-dlGl4c1qUClZRLTikScX29sC3F0iPLK99c38",
+      "businessName": "Math4Code",
+      "contactNumber": "+916297534924"
+    },
+    "tenants": {
+      "default": "00000000-0000-0000-0000-000000000001"
     }
   }
 }

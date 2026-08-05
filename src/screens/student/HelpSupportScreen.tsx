@@ -8,6 +8,8 @@ import {
     TextInput,
     Alert,
     Linking,
+    ActivityIndicator,
+    StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,11 +17,15 @@ import { useNavigation } from '@react-navigation/native';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { textStyles } from '../../constants/typography';
 import { spacing, borderRadius } from '../../constants/spacing';
+import { feedbackService } from '../../services/feedback';
+import Toast from 'react-native-toast-message';
 
 export const HelpSupportScreen = () => {
     const navigation = useNavigation();
     const { colors, shadows } = useAppTheme();
     const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
+    const [feedbackText, setFeedbackText] = useState('');
+    const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
 
     const faqs = [
         {
@@ -40,7 +46,7 @@ export const HelpSupportScreen = () => {
         },
         {
             question: 'What are coins and XP?',
-            answer: 'Coins and XP are rewards earned by completing courses, quizzes, and daily activities. They help you level up and unlock badges.',
+            answer: 'Coins and XP are virtual rewards earned by completing courses, quizzes, and daily activities. They help you level up, climb the leaderboard, and unlock badges. Note: These are for gamification only and cannot be exchanged for real money or used to purchase courses.',
         },
     ];
 
@@ -54,16 +60,74 @@ export const HelpSupportScreen = () => {
         {
             icon: 'logo-whatsapp',
             label: 'WhatsApp',
-            description: 'Chat with us',
-            action: () => Linking.openURL('https://wa.me/1234567890'),
+            description: '+91 62975 34924',
+            action: () => Linking.openURL('whatsapp://send?phone=916297534924'),
         },
         {
             icon: 'call',
             label: 'Phone Support',
-            description: '+1 (234) 567-8900',
-            action: () => Linking.openURL('tel:+12345678900'),
+            description: '+91 62975 34924',
+            action: () => Linking.openURL('tel:+916297534924'),
         },
     ];
+
+    const handleSubmitFeedback = async () => {
+        if (!feedbackText.trim()) {
+            Toast.show({
+                type: 'error',
+                text1: 'Empty Feedback',
+                text2: 'Please enter your feedback before submitting',
+            });
+            return;
+        }
+
+        setIsSubmittingFeedback(true);
+        try {
+            const result = await feedbackService.submitFeedback({
+                message: feedbackText.trim(),
+                category: 'general',
+            });
+
+            if (result.success) {
+                Toast.show({
+                    type: 'success',
+                    text1: 'Thank you!',
+                    text2: 'Your feedback has been submitted successfully',
+                    visibilityTime: 3000,
+                });
+                setFeedbackText('');
+            } else {
+                Toast.show({
+                    type: 'error',
+                    text1: 'Submission Failed',
+                    text2: result.error || 'Please try again later',
+                });
+            }
+        } catch (error) {
+            Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'Failed to submit feedback. Please try again.',
+            });
+        } finally {
+            setIsSubmittingFeedback(false);
+        }
+    };
+
+    const handleOpenUserGuide = () => {
+        navigation.navigate('UserGuide' as never);
+    };
+
+    const handleOpenTutorials = () => {
+        // Open Math4Code YouTube channel or tutorials page
+        Linking.openURL('https://www.youtube.com/@MathForCode').catch(() => {
+            Toast.show({
+                type: 'info',
+                text1: 'Tutorials',
+                text2: 'Visit www.math4code.com for video tutorials',
+            });
+        });
+    };
 
     const styles = StyleSheet.create({
         container: {
@@ -78,6 +142,7 @@ export const HelpSupportScreen = () => {
             paddingVertical: spacing.md,
             borderBottomWidth: 1,
             borderBottomColor: colors.border,
+            backgroundColor: colors.surface,
         },
         backButton: {
             padding: spacing.xs,
@@ -185,6 +250,7 @@ export const HelpSupportScreen = () => {
             borderWidth: 1,
             borderColor: colors.border,
             minHeight: 120,
+            textAlignVertical: 'top',
         },
         submitButton: {
             backgroundColor: colors.primary,
@@ -192,6 +258,12 @@ export const HelpSupportScreen = () => {
             padding: spacing.md,
             alignItems: 'center',
             ...shadows.medium,
+            flexDirection: 'row',
+            justifyContent: 'center',
+            gap: spacing.sm,
+        },
+        submitButtonDisabled: {
+            opacity: 0.6,
         },
         submitButtonText: {
             ...textStyles.body,
@@ -202,6 +274,8 @@ export const HelpSupportScreen = () => {
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
+            <StatusBar barStyle="dark-content" backgroundColor={colors.surface} />
+
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -216,11 +290,17 @@ export const HelpSupportScreen = () => {
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>How can we help?</Text>
                     <View style={styles.quickActions}>
-                        <TouchableOpacity style={styles.quickActionCard}>
+                        <TouchableOpacity
+                            style={styles.quickActionCard}
+                            onPress={handleOpenUserGuide}
+                        >
                             <Ionicons name="book" size={32} color={colors.primary} />
                             <Text style={styles.quickActionText}>User Guide</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.quickActionCard}>
+                        <TouchableOpacity
+                            style={styles.quickActionCard}
+                            onPress={handleOpenTutorials}
+                        >
                             <Ionicons name="videocam" size={32} color={colors.primary} />
                             <Text style={styles.quickActionText}>Tutorials</Text>
                         </TouchableOpacity>
@@ -289,14 +369,53 @@ export const HelpSupportScreen = () => {
                             placeholderTextColor={colors.textSecondary}
                             multiline
                             numberOfLines={4}
-                            textAlignVertical="top"
+                            value={feedbackText}
+                            onChangeText={setFeedbackText}
+                            editable={!isSubmittingFeedback}
                         />
                         <TouchableOpacity
-                            style={styles.submitButton}
-                            onPress={() => Alert.alert('Thank you!', 'Your feedback has been submitted.')}
+                            style={[
+                                styles.submitButton,
+                                isSubmittingFeedback && styles.submitButtonDisabled
+                            ]}
+                            onPress={handleSubmitFeedback}
+                            disabled={isSubmittingFeedback}
                         >
-                            <Text style={styles.submitButtonText}>Submit Feedback</Text>
+                            {isSubmittingFeedback ? (
+                                <>
+                                    <ActivityIndicator color={colors.textInverse} size="small" />
+                                    <Text style={styles.submitButtonText}>Submitting...</Text>
+                                </>
+                            ) : (
+                                <>
+                                    <Ionicons name="send" size={18} color={colors.textInverse} />
+                                    <Text style={styles.submitButtonText}>Submit Feedback</Text>
+                                </>
+                            )}
                         </TouchableOpacity>
+                    </View>
+                </View>
+
+                {/* Business Details */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Business Details</Text>
+                    <View style={styles.contactItem}>
+                        <View style={styles.contactIcon}>
+                            <Ionicons name="business" size={24} color={colors.primary} />
+                        </View>
+                        <View style={styles.contactInfo}>
+                            <Text style={styles.contactLabel}>Math4Code (HIRANMOY MANDAL)</Text>
+                            <Text style={styles.contactDescription}>Registered Business Name</Text>
+                        </View>
+                    </View>
+                    <View style={styles.contactItem}>
+                        <View style={styles.contactIcon}>
+                            <Ionicons name="location" size={24} color={colors.primary} />
+                        </View>
+                        <View style={styles.contactInfo}>
+                            <Text style={styles.contactLabel}>Kolkata, 700049</Text>
+                            <Text style={styles.contactDescription}>Registered Location</Text>
+                        </View>
                     </View>
                 </View>
 

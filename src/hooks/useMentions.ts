@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../services/supabase';
 import { CommunityMessage } from '../types';
+import { TENANT_ID } from '../utils/tenant';
 
 export const useMentions = () => {
     return useQuery({
@@ -43,6 +44,7 @@ export const useMentions = () => {
                         course_id
                     )
                 `)
+                .eq('tenant_id', TENANT_ID)
                 .ilike('content', `%@${profile.full_name}%`)
                 .order('created_at', { ascending: false })
                 .limit(50);

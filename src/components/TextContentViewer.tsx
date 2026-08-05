@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     View,
     Text,
@@ -7,12 +7,15 @@ import {
     TouchableOpacity,
     Alert,
     useWindowDimensions,
+    Platform,
 } from 'react-native';
 import RenderHtml from 'react-native-render-html';
+import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import { textStyles } from '../constants/typography';
 import { spacing, borderRadius } from '../constants/spacing';
+import { parseMathContent, buildMathHtmlDocument } from '../utils/mathBlockParser';
 
 interface TextContentViewerProps {
     content: string;
@@ -24,19 +27,32 @@ export const TextContentViewer: React.FC<TextContentViewerProps> = ({
     onComplete,
 }) => {
     const { width } = useWindowDimensions();
-    const [hasScrolledToEnd, setHasScrolledToEnd] = useState(false);
+    // Default initial height higher to prevent truncation before first postMessage
+    const [webViewHeight, setWebViewHeight] = useState<number>(800);
 
-    const handleScroll = (event: any) => {
-        const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-        const paddingToBottom = 20;
-        const isCloseToBottom =
-            layoutMeasurement.height + contentOffset.y >=
-            contentSize.height - paddingToBottom;
+    // Reset height on content change
+    useEffect(() => {
+        setWebViewHeight(800);
+    }, [content]);
 
-        if (isCloseToBottom && !hasScrolledToEnd) {
-            setHasScrolledToEnd(true);
+    // Handle iframe postMessage on Web platform
+    useEffect(() => {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            const handleWindowMessage = (event: MessageEvent) => {
+                try {
+                    const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+                    if (data && typeof data.height === 'number' && data.height > 50) {
+                        setWebViewHeight(prev => Math.max(prev, data.height));
+                    }
+                } catch (e) {
+                    // Ignore non-JSON or external origin messages
+                }
+            };
+
+            window.addEventListener('message', handleWindowMessage);
+            return () => window.removeEventListener('message', handleWindowMessage);
         }
-    };
+    }, []);
 
     const handleMarkComplete = () => {
         if (onComplete) {
@@ -56,19 +72,28 @@ export const TextContentViewer: React.FC<TextContentViewerProps> = ({
         );
     }
 
-    // Check if content is HTML or plain text
-    const isHtml = content.trim().startsWith('<');
+    // Detect legacy HTML format
+    const isLegacyHtml = content.trim().startsWith('<');
+
+    // Parse modern LaTeX / Markdown content
+    const fullHtml = useMemo(() => {
+        if (isLegacyHtml) return null;
+        const parsedBody = parseMathContent(content);
+        return buildMathHtmlDocument(parsedBody, {
+            fontSize: 16,
+            textColor: colors.text,
+            backgroundColor: 'transparent',
+        });
+    }, [content, isLegacyHtml]);
 
     return (
         <View style={styles.container}>
             <ScrollView
                 style={styles.scrollView}
                 contentContainerStyle={styles.contentContainer}
-                onScroll={handleScroll}
-                scrollEventThrottle={400}
                 showsVerticalScrollIndicator={true}
             >
-                {isHtml ? (
+                {isLegacyHtml ? (
                     <RenderHtml
                         contentWidth={width - spacing.xl * 2}
                         source={{ html: content }}
@@ -163,7 +188,44 @@ export const TextContentViewer: React.FC<TextContentViewerProps> = ({
                         }}
                     />
                 ) : (
-                    <Text style={styles.plainText}>{content}</Text>
+                    <View style={{ width: '100%', minHeight: webViewHeight }}>
+                        {Platform.OS === 'web' ? (
+                            React.createElement('iframe', {
+                                srcDoc: fullHtml,
+                                style: {
+                                    width: '100%',
+                                    minHeight: '400px',
+                                    height: `${webViewHeight}px`,
+                                    border: 'none',
+                                    backgroundColor: 'transparent',
+                                },
+                            })
+                        ) : (
+                            <WebView
+                                originWhitelist={['*']}
+                                source={{ html: fullHtml || '' }}
+                                style={{
+                                    height: webViewHeight,
+                                    backgroundColor: 'transparent',
+                                }}
+                                scrollEnabled={false}
+                                onMessage={(event) => {
+                                    try {
+                                        const data = JSON.parse(event.nativeEvent.data);
+                                        if (data.height && data.height > 50) {
+                                            setWebViewHeight(prev => Math.max(prev, data.height));
+                                        }
+                                    } catch (e) {
+                                        // Ignore
+                                    }
+                                }}
+                                javaScriptEnabled={true}
+                                domStorageEnabled={true}
+                                showsVerticalScrollIndicator={false}
+                                showsHorizontalScrollIndicator={false}
+                            />
+                        )}
+                    </View>
                 )}
 
                 {/* Spacer for better scrolling */}
@@ -174,24 +236,15 @@ export const TextContentViewer: React.FC<TextContentViewerProps> = ({
             {onComplete && (
                 <View style={styles.actionBar}>
                     <TouchableOpacity
-                        style={[
-                            styles.completeButton,
-                            // !hasScrolledToEnd && styles.completeButtonDisabled, // Removed restriction
-                        ]}
+                        style={styles.completeButton}
                         onPress={handleMarkComplete}
-                    // disabled={!hasScrolledToEnd} // Removed restriction
                     >
                         <Ionicons
                             name="checkmark-circle"
                             size={20}
                             color="#fff"
                         />
-                        <Text
-                            style={[
-                                styles.completeButtonText,
-                                // !hasScrolledToEnd && styles.completeButtonTextDisabled, // Removed restriction
-                            ]}
-                        >
+                        <Text style={styles.completeButtonText}>
                             Mark as Complete
                         </Text>
                     </TouchableOpacity>
@@ -210,12 +263,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     contentContainer: {
-        padding: spacing.xl,
-    },
-    plainText: {
-        ...textStyles.body,
-        color: colors.text,
-        lineHeight: 24,
+        padding: spacing.lg,
     },
     endSpacer: {
         height: spacing.xl,
@@ -235,15 +283,9 @@ const styles = StyleSheet.create({
         paddingVertical: spacing.md,
         borderRadius: borderRadius.lg,
     },
-    completeButtonDisabled: {
-        backgroundColor: colors.surfaceAlt,
-    },
     completeButtonText: {
         ...textStyles.button,
         color: colors.textInverse,
-    },
-    completeButtonTextDisabled: {
-        color: colors.textDisabled,
     },
     emptyContainer: {
         flex: 1,

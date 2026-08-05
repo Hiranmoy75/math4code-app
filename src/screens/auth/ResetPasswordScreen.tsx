@@ -90,98 +90,106 @@ export const ResetPasswordScreen = () => {
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
                 >
-                    {/* Glass Card */}
-                    <BlurView intensity={20} tint="light" style={styles.glassCard}>
-                        {/* Logo */}
-                        <View style={styles.logoContainer}>
-                            <Text style={styles.logoText}>Math4Code</Text>
-                            <View style={styles.logoUnderline} />
-                        </View>
+                {/* Back Button */}
+                <TouchableOpacity
+                    style={styles.backButton}
+                    onPress={() => navigation.goBack()}
+                >
+                    <Ionicons name="arrow-back" size={24} color="#5C6BC0" />
+                </TouchableOpacity>
 
-                        {/* Title */}
-                        <Text style={styles.title}>Reset Password</Text>
-                        <Text style={styles.subtitle}>
-                            Create a strong password for your account
-                        </Text>
+                {/* Glass Card */}
+                <BlurView intensity={20} tint="light" style={styles.glassCard}>
+                    {/* Logo */}
+                    <View style={styles.logoContainer}>
+                        <Text style={styles.logoText}>Math4Code</Text>
+                        <View style={styles.logoUnderline} />
+                    </View>
 
-                        {/* New Password Input */}
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>New Password</Text>
-                            <View style={styles.passwordContainer}>
-                                <TextInput
-                                    style={[styles.input, styles.passwordInput]}
-                                    placeholder="Enter new password (min 6 characters)"
-                                    placeholderTextColor="#9E9E9E"
-                                    value={password}
-                                    onChangeText={setPassword}
-                                    secureTextEntry={!showPassword}
-                                />
-                                <TouchableOpacity
-                                    style={styles.eyeIcon}
-                                    onPress={() => setShowPassword(!showPassword)}
-                                >
-                                    <Ionicons
-                                        name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                                        size={20}
-                                        color="#9E9E9E"
-                                    />
-                                </TouchableOpacity>
-                            </View>
-                        </View>
+                    {/* Title */}
+                    <Text style={styles.title}>Reset Password</Text>
+                    <Text style={styles.subtitle}>
+                        Create a strong password for your account
+                    </Text>
 
-                        {/* Confirm Password Input */}
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Confirm Password</Text>
-                            <View style={styles.passwordContainer}>
-                                <TextInput
-                                    style={[styles.input, styles.passwordInput]}
-                                    placeholder="Re-enter your password"
-                                    placeholderTextColor="#9E9E9E"
-                                    value={confirmPassword}
-                                    onChangeText={setConfirmPassword}
-                                    secureTextEntry={!showConfirmPassword}
-                                />
-                                <TouchableOpacity
-                                    style={styles.eyeIcon}
-                                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                                >
-                                    <Ionicons
-                                        name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
-                                        size={20}
-                                        color="#9E9E9E"
-                                    />
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-
-                        {/* Update Password Button */}
-                        <TouchableOpacity
-                            style={styles.updateButton}
-                            onPress={handleUpdatePassword}
-                            disabled={loading}
-                        >
-                            <LinearGradient
-                                colors={['#5C6BC0', '#7E57C2']}
-                                style={styles.updateGradient}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 0 }}
+                    {/* New Password Input */}
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>New Password</Text>
+                        <View style={styles.passwordContainer}>
+                            <TextInput
+                                style={[styles.input, styles.passwordInput]}
+                                placeholder="Enter new password (min 6 characters)"
+                                placeholderTextColor="#9E9E9E"
+                                value={password}
+                                onChangeText={setPassword}
+                                secureTextEntry={!showPassword}
+                            />
+                            <TouchableOpacity
+                                style={styles.eyeIcon}
+                                onPress={() => setShowPassword(!showPassword)}
                             >
-                                <Text style={styles.updateText}>
-                                    {loading ? 'Updating...' : 'Update Password'}
-                                </Text>
-                            </LinearGradient>
-                        </TouchableOpacity>
-
-                        {/* Footer */}
-                        <View style={styles.footer}>
-                            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-                                <Text style={styles.footerLink}>Back to Login</Text>
+                                <Ionicons
+                                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                                    size={20}
+                                    color="#9E9E9E"
+                                />
                             </TouchableOpacity>
                         </View>
-                    </BlurView>
-                </ScrollView>
-            </KeyboardAvoidingView>
-        </View>
+                    </View>
+
+                    {/* Confirm Password Input */}
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Confirm Password</Text>
+                        <View style={styles.passwordContainer}>
+                            <TextInput
+                                style={[styles.input, styles.passwordInput]}
+                                placeholder="Re-enter your password"
+                                placeholderTextColor="#9E9E9E"
+                                value={confirmPassword}
+                                onChangeText={setConfirmPassword}
+                                secureTextEntry={!showConfirmPassword}
+                            />
+                            <TouchableOpacity
+                                style={styles.eyeIcon}
+                                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                            >
+                                <Ionicons
+                                    name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
+                                    size={20}
+                                    color="#9E9E9E"
+                                />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    {/* Update Password Button */}
+                    <TouchableOpacity
+                        style={styles.updateButton}
+                        onPress={handleUpdatePassword}
+                        disabled={loading}
+                    >
+                        <LinearGradient
+                            colors={['#5C6BC0', '#7E57C2']}
+                            style={styles.updateGradient}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                        >
+                            <Text style={styles.updateText}>
+                                {loading ? 'Updating...' : 'Update Password'}
+                            </Text>
+                        </LinearGradient>
+                    </TouchableOpacity>
+
+                    {/* Footer */}
+                    <View style={styles.footer}>
+                        <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+                            <Text style={styles.footerLink}>Back to Login</Text>
+                        </TouchableOpacity>
+                    </View>
+                </BlurView>
+            </ScrollView>
+        </KeyboardAvoidingView>
+        </View >
     );
 };
 
@@ -210,6 +218,20 @@ const styles = StyleSheet.create({
         padding: spacing['2xl'],
         paddingTop: spacing['4xl'],
         justifyContent: 'center',
+    },
+    backButton: {
+        position: 'absolute',
+        top: spacing['2xl'],
+        left: spacing.lg,
+        zIndex: 10,
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        borderRadius: 20,
+        padding: spacing.sm,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
     },
     logoContainer: {
         alignItems: 'center',
@@ -300,3 +322,4 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
 });
+

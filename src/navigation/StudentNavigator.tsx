@@ -2,6 +2,7 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StudentTabParamList } from '../types';
 import { DashboardScreen } from '../screens/student/DashboardScreen';
 import { CommunityScreen } from '../screens/student/CommunityScreen';
@@ -13,6 +14,23 @@ const Tab = createBottomTabNavigator<StudentTabParamList>();
 
 export const StudentNavigator = () => {
     const { colors } = useAppTheme();
+    const insets = useSafeAreaInsets();
+
+    // Calculate tab bar height based on safe area
+    // Base height for content (icons + labels)
+    const TAB_CONTENT_HEIGHT = 60;
+
+    // Determine safe bottom padding
+    // For iOS: standard is ~34 usually, we use 20-30
+    // For Android: 
+    // - Gesture Nav: insets.bottom is usually small (~20)
+    // - 3-Button Nav (Edge-to-Edge): insets.bottom is large (~48)
+    // - Standard (Not Edge-to-Edge): insets.bottom is 0 (handled by OS window resizing) -> we add small padding for aesthetics
+    const bottomPadding = Platform.OS === 'ios'
+        ? Math.max(insets.bottom, 20)
+        : Math.max(insets.bottom, 16);
+
+    const dynamicHeight = TAB_CONTENT_HEIGHT + bottomPadding;
 
     return (
         <Tab.Navigator
@@ -21,9 +39,9 @@ export const StudentNavigator = () => {
                 tabBarActiveTintColor: colors.primary,
                 tabBarInactiveTintColor: colors.textSecondary,
                 tabBarStyle: {
-                    height: Platform.OS === 'ios' ? 90 : 70,
-                    paddingBottom: Platform.OS === 'ios' ? 28 : 10,
-                    paddingTop: 5,
+                    height: dynamicHeight,
+                    paddingBottom: bottomPadding,
+                    paddingTop: 8,
                     borderTopWidth: 1,
                     borderTopColor: colors.border,
                     backgroundColor: colors.surface,

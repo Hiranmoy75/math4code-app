@@ -69,6 +69,9 @@ export interface Lesson {
     video_provider?: 'youtube' | 'bunny' | 'direct';
     video_type?: 'vod' | 'live';
     video_status?: string;
+    // Sequential learning fields
+    sequential_unlock_enabled?: boolean;
+    prerequisite_lesson_id?: string | null;
 }
 
 export interface Exam {
@@ -86,6 +89,7 @@ export interface Exam {
     result_release_time?: string;
     show_answers?: boolean;
     show_results_immediately?: boolean;
+    allow_pause?: boolean;
 }
 
 export interface Section {
@@ -97,6 +101,7 @@ export interface Section {
     section_order: number;
     max_questions_to_attempt?: number | null;
     required_attempts?: number | null;
+    shuffle_questions?: boolean;
     questions?: Question[];
 }
 
@@ -121,7 +126,7 @@ export interface Option {
 }
 
 export interface ExamAttempt {
-    created_at: boolean;
+    created_at: string;
     id: string;
     exam_id: string;
     student_id: string;
@@ -129,6 +134,11 @@ export interface ExamAttempt {
     submitted_at?: string;
     status: 'in_progress' | 'submitted' | 'graded';
     total_time_spent: number;
+    elapsed_time_seconds?: number;
+    last_activity_at?: string;
+    is_paused?: boolean;
+    exam_deadline?: string;
+    tenant_id?: string;
 }
 
 export interface Response {
@@ -274,6 +284,7 @@ export type RootStackParamList = {
     EditProfile: undefined;
     Settings: undefined;
     HelpSupport: undefined;
+    UserGuide: undefined;
 };
 
 export type AuthStackParamList = {
@@ -286,7 +297,7 @@ export type AuthStackParamList = {
 export type StudentTabParamList = {
     HomeTab: undefined;
     LibraryTab: undefined;
-    CommunityTab: undefined;
+    CommunityTab: { courseId?: string } | undefined;
     ProfileTab: undefined;
 };
 

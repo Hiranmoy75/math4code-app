@@ -6,6 +6,7 @@ import {
     ScrollView,
     TouchableOpacity,
     Image,
+    StatusBar,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -241,6 +242,7 @@ export const ProfileScreen = () => {
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
+            <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
             <ScrollView showsVerticalScrollIndicator={false}>
                 {/* Profile Header */}
                 <LinearGradient
@@ -320,7 +322,7 @@ export const ProfileScreen = () => {
                         <View style={styles.statCard}>
                             <Ionicons name="time" size={24} color={colors.warning} />
                             <Text style={styles.statValue}>
-                                {enrolledCourses?.filter(c => c.progress_percentage > 0 && c.progress_percentage < 100).length || 0}
+                                {enrolledCourses?.filter(c => (c.progress_percentage ?? 0) > 0 && (c.progress_percentage ?? 0) < 100).length || 0}
                             </Text>
                             <Text style={styles.statLabel}>In Progress</Text>
                         </View>
@@ -453,6 +455,7 @@ export const ProfileScreen = () => {
 
                 {/* App Version */}
                 <Text style={styles.version}>Version 1.0.0</Text>
+                <Text style={[styles.version, { marginTop: 2 }]}>Registered Business Name: HIRANMOY MANDAL</Text>
                 <View style={{ height: 20 }} />
             </ScrollView>
 

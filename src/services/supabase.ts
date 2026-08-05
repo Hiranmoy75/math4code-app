@@ -2,16 +2,13 @@ import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
+import { TENANT_ID } from '../utils/tenant';
 
 // Environment variables from app.json extra or .env
 const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = Constants.expoConfig?.extra?.supabaseAnonKey || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
-console.log('Supabase Configuration:', {
-    url: supabaseUrl,
-    hasKey: !!supabaseAnonKey,
-    platform: Platform.OS
-});
+// Supabase config log removed for production performance & security
 
 if (!supabaseUrl || !supabaseAnonKey) {
     console.error('❌ Missing Supabase environment variables!');
@@ -29,6 +26,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     global: {
         headers: {
             'X-Client-Info': `math4code-app/${Platform.OS}`,
+            'x-tenant-id': TENANT_ID,
         },
     },
 });

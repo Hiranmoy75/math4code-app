@@ -348,7 +348,9 @@ export const ExamAccessChecker: React.FC<ExamAccessCheckerProps> = ({ status, on
 
                     <View style={styles.unlockText}>
                         <Text style={styles.detailLabel}>
-                            🔓 UNLOCKS AT {status.startTime?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            🔓 UNLOCKS AT {status.startTime && !isNaN(status.startTime.getTime())
+                                ? status.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })
+                                : 'TBD'}
                         </Text>
                     </View>
                 </View>

@@ -49,7 +49,11 @@ export const HomeBanner = ({
                 <View style={styles.content}>
                     <View style={styles.textContainer}>
                         <Text style={styles.title}>{title}</Text>
-                        <Text style={styles.subtitle}>{subtitle}</Text>
+                        <Text style={styles.subtitle} numberOfLines={2} ellipsizeMode="tail">
+                            {subtitle.split(' ').reduce((acc, word, index) => {
+                                return acc + (index === 3 ? '\n' : ' ') + word;
+                            })}
+                        </Text>
 
                         <TouchableOpacity
                             style={[styles.button, { backgroundColor: themeColor }]}
@@ -103,19 +107,24 @@ const styles = StyleSheet.create({
     textContainer: {
         zIndex: 10,
         flex: 1,
+        paddingRight: 60, // Add padding
     },
     title: {
-        fontSize: 14,
+        fontSize: 12, // Smaller
         fontWeight: '800',
         color: '#000',
         marginBottom: 4,
+        opacity: 0.7,
+        textTransform: 'uppercase',
     },
     subtitle: {
-        fontSize: 18,
-        fontWeight: '900',
-        color: '#333',
+        fontSize: 16, // Reduced from 18
+        fontWeight: '800',
+        color: '#1F2937',
         marginBottom: spacing.md,
         lineHeight: 22,
+        height: 48, // Adjusted for smaller font
+        textAlignVertical: 'center',
     },
     button: {
         flexDirection: 'row',

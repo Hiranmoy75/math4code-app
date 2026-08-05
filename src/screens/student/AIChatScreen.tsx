@@ -10,6 +10,7 @@ import {
     Platform,
     ActivityIndicator,
     SafeAreaView,
+    StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -179,6 +180,7 @@ export const AIChatScreen = () => {
 
     return (
         <SafeAreaView style={styles.container}>
+            <StatusBar barStyle="dark-content" backgroundColor={colors.surface} />
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color={colors.text} />

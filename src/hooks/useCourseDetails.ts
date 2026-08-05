@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../services/supabase';
 import { Course, Module, Lesson } from '../types';
+import { TENANT_ID } from '../utils/tenant';
 
 export const useCourseDetails = (courseId: string) => {
     return useQuery({
@@ -11,6 +12,7 @@ export const useCourseDetails = (courseId: string) => {
                 .from('courses')
                 .select('*')
                 .eq('id', courseId)
+                .eq('tenant_id', TENANT_ID)
                 .single();
 
             if (courseError) {
@@ -59,6 +61,7 @@ export const useCourseDetails = (courseId: string) => {
                     .select('status, progress_percentage')
                     .eq('user_id', user.id)
                     .eq('course_id', courseId)
+                    .eq('tenant_id', TENANT_ID)
                     .eq('status', 'active')
                     .maybeSingle();
 

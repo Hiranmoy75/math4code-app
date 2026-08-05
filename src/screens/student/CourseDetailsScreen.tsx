@@ -15,6 +15,7 @@ import {
     AppState,
     ActivityIndicator,
     useWindowDimensions,
+    Share,
 } from 'react-native';
 import RenderHtml from 'react-native-render-html';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -254,8 +255,19 @@ export const CourseDetailsScreen = () => {
         },
         iconContainer: {
             marginRight: spacing.md,
-            width: 32,
+            width: 36,
+            height: 36,
+            borderRadius: 10,
             alignItems: 'center',
+            justifyContent: 'center',
+        },
+        folderIconBadge: {
+            width: 36,
+            height: 36,
+            borderRadius: 10,
+            backgroundColor: '#EEF2FF',
+            alignItems: 'center',
+            justifyContent: 'center',
         },
         lessonInfo: {
             flex: 1,
@@ -409,6 +421,16 @@ export const CourseDetailsScreen = () => {
 
     const { course, modules, isEnrolled } = data;
 
+    const handleShare = async () => {
+        try {
+            await Share.share({
+                message: `Check out this course: ${course.title}\n\nhttps://www.math4code.com/courses/${course.id}`,
+            });
+        } catch (error: any) {
+            Alert.alert(error.message);
+        }
+    };
+
     // Use real progress data from API
     const totalLessons = progressData?.totalLessons || modules.reduce((acc, m) => acc + (m.lessons?.length || 0), 0);
     const completedLessons = progressData?.completedLessons || 0;
@@ -416,9 +438,26 @@ export const CourseDetailsScreen = () => {
 
     // --- Render Logic ---
 
+    const getModuleMetaText = (lessons: Lesson[] = []) => {
+        const videoCount = lessons.filter(l => l.content_type === 'video').length;
+        const pdfCount = lessons.filter(l => l.content_type === 'pdf').length;
+        const textCount = lessons.filter(l => l.content_type === 'text').length;
+        const quizCount = lessons.filter(l => l.content_type === 'quiz' || l.content_type === 'exam').length;
+
+        const parts: string[] = [];
+        if (videoCount > 0) parts.push(`${videoCount} ${videoCount === 1 ? 'video' : 'videos'}`);
+        if (pdfCount > 0) parts.push(`${pdfCount} ${pdfCount === 1 ? 'pdf' : 'pdfs'}`);
+        if (textCount > 0) parts.push(`${textCount} ${textCount === 1 ? 'text' : 'texts'}`);
+        if (quizCount > 0) parts.push(`${quizCount} ${quizCount === 1 ? 'quiz' : 'quizzes'}`);
+
+        return parts.length > 0 ? parts.join(' • ') : '0 lessons';
+    };
+
     const renderLessonItem = (lesson: Lesson, isLocked: boolean = false) => {
         const isVideo = lesson.content_type === 'video';
         const isPdf = lesson.content_type === 'pdf';
+        const isText = lesson.content_type === 'text';
+        const isQuiz = lesson.content_type === 'quiz' || lesson.content_type === 'exam';
 
         const lessonProgress = progressData?.lessons?.find(l => l.id === lesson.id);
         const isCompleted = lessonProgress?.completed || false;
@@ -426,6 +465,40 @@ export const CourseDetailsScreen = () => {
         // If it's a free preview and we are not enrolled (locked is passed as true but free preview overrides)
         const isPreview = lesson.is_free_preview && !isEnrolled;
         const finalIsLocked = isLocked && !isPreview;
+
+        const getLessonIconConfig = () => {
+            if (isCompleted) {
+                return { name: "checkmark-circle", color: "#059669", bg: "#DCFCE7" };
+            }
+            if (finalIsLocked) {
+                return { name: "lock-closed", color: "#6B7280", bg: "#F3F4F6" };
+            }
+            if (isVideo) {
+                return { name: "play-circle", color: "#2563EB", bg: "#EFF6FF" };
+            }
+            if (isPdf) {
+                return { name: "document-text", color: "#DC2626", bg: "#FEF2F2" };
+            }
+            if (isText) {
+                return { name: "newspaper", color: "#16A34A", bg: "#F0FDF4" };
+            }
+            if (isQuiz) {
+                return { name: "help-circle", color: "#9333EA", bg: "#F3E8FF" };
+            }
+            return { name: "document-text", color: colors.primary, bg: "#EEF2FF" };
+        };
+
+        const iconConfig = getLessonIconConfig();
+
+        const getActionButtonConfig = () => {
+            if (isPdf) return { name: "download-outline", color: "#DC2626" };
+            if (isVideo) return { name: "play-circle-outline", color: "#2563EB" };
+            if (isText) return { name: "book-outline", color: "#16A34A" };
+            if (isQuiz) return { name: "arrow-forward-circle-outline", color: "#9333EA" };
+            return { name: "play-circle-outline", color: colors.primary };
+        };
+
+        const actionConfig = getActionButtonConfig();
 
         return (
             <TouchableOpacity
@@ -445,20 +518,12 @@ export const CourseDetailsScreen = () => {
                 disabled={finalIsLocked}
             >
                 <View style={styles.lessonLeft}>
-                    <View style={styles.iconContainer}>
-                        {isCompleted ? (
-                            <Ionicons
-                                name="checkmark-circle"
-                                size={20}
-                                color={colors.success}
-                            />
-                        ) : (
-                            <Ionicons
-                                name={finalIsLocked ? "lock-closed-outline" : (isVideo ? "play-circle" : "document-text")}
-                                size={20}
-                                color={isPreview ? colors.success : colors.textSecondary}
-                            />
-                        )}
+                    <View style={[styles.iconContainer, { backgroundColor: iconConfig.bg }]}>
+                        <Ionicons
+                            name={iconConfig.name as any}
+                            size={18}
+                            color={iconConfig.color}
+                        />
                     </View>
                     <View style={styles.lessonInfo}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -480,11 +545,17 @@ export const CourseDetailsScreen = () => {
                         </View>
 
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            {lesson.video_duration && (
+                            {lesson.video_duration ? (
                                 <Text style={styles.lessonMeta}>{lesson.video_duration} mins</Text>
-                            )}
+                            ) : null}
                             {isPdf && (
-                                <Text style={styles.lessonMeta}>PDF</Text>
+                                <Text style={[styles.lessonMeta, { color: '#DC2626', fontWeight: '500' }]}>PDF Document</Text>
+                            )}
+                            {isText && (
+                                <Text style={[styles.lessonMeta, { color: '#16A34A', fontWeight: '500' }]}>Text Lesson</Text>
+                            )}
+                            {isQuiz && (
+                                <Text style={[styles.lessonMeta, { color: '#9333EA', fontWeight: '500' }]}>Quiz / Exam</Text>
                             )}
                         </View>
                     </View>
@@ -492,9 +563,9 @@ export const CourseDetailsScreen = () => {
                 {!finalIsLocked && (
                     <TouchableOpacity style={styles.actionButton}>
                         <Ionicons
-                            name={isPdf ? "download-outline" : "play-circle-outline"}
+                            name={actionConfig.name as any}
                             size={24}
-                            color={isPreview ? colors.success : colors.primary}
+                            color={actionConfig.color}
                         />
                     </TouchableOpacity>
                 )}
@@ -512,8 +583,14 @@ export const CourseDetailsScreen = () => {
                         <Ionicons name="arrow-back" size={24} color={colors.text} />
                     </TouchableOpacity>
                     <View style={styles.headerActions}>
-                        <TouchableOpacity style={styles.headerIcon}>
-                            <Ionicons name="create-outline" size={24} color={colors.primary} />
+                        <TouchableOpacity
+                            style={styles.headerIcon}
+                            onPress={() => navigation.navigate('Main', {
+                                screen: 'CommunityTab',
+                                params: { courseId }
+                            })}
+                        >
+                            <Ionicons name="chatbubbles-outline" size={24} color={colors.primary} />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -542,8 +619,6 @@ export const CourseDetailsScreen = () => {
                     <View style={styles.modulesList}>
                         {modules.map((module) => {
                             const isExpanded = expandedModuleId === module.id;
-                            const pdfCount = module.lessons?.filter(l => l.content_type === 'pdf').length || 0;
-                            const videoCount = module.lessons?.filter(l => l.content_type === 'video').length || 0;
 
                             return (
                                 <View key={module.id} style={styles.moduleCard}>
@@ -552,11 +627,16 @@ export const CourseDetailsScreen = () => {
                                         onPress={() => toggleModule(module.id)}
                                         activeOpacity={0.7}
                                     >
-                                        <View style={styles.moduleInfo}>
-                                            <Text style={styles.moduleTitle}>{module.title}</Text>
-                                            <Text style={styles.moduleMeta}>
-                                                {pdfCount} pdfs • {videoCount} videos
-                                            </Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 }}>
+                                            <View style={styles.folderIconBadge}>
+                                                <Ionicons name="folder-open" size={20} color="#4F46E5" />
+                                            </View>
+                                            <View style={styles.moduleInfo}>
+                                                <Text style={styles.moduleTitle}>{module.title}</Text>
+                                                <Text style={styles.moduleMeta}>
+                                                    {getModuleMetaText(module.lessons)}
+                                                </Text>
+                                            </View>
                                         </View>
                                         <Ionicons
                                             name={isExpanded ? "chevron-up" : "chevron-down"}
@@ -588,7 +668,7 @@ export const CourseDetailsScreen = () => {
                     <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
                 <View style={styles.headerActions}>
-                    <TouchableOpacity style={styles.headerIconOverlay}>
+                    <TouchableOpacity style={styles.headerIconOverlay} onPress={handleShare}>
                         <Ionicons name="share-social-outline" size={24} color={colors.primary} />
                     </TouchableOpacity>
                 </View>
@@ -645,8 +725,6 @@ export const CourseDetailsScreen = () => {
                     <View style={styles.modulesList}>
                         {modules.map((module) => {
                             const isExpanded = expandedModuleId === module.id;
-                            const pdfCount = module.lessons?.filter(l => l.content_type === 'pdf').length || 0;
-                            const videoCount = module.lessons?.filter(l => l.content_type === 'video').length || 0;
 
                             return (
                                 <View key={module.id} style={styles.moduleCard}>
@@ -655,11 +733,16 @@ export const CourseDetailsScreen = () => {
                                         onPress={() => toggleModule(module.id)}
                                         activeOpacity={0.7}
                                     >
-                                        <View style={styles.moduleInfo}>
-                                            <Text style={styles.moduleTitle}>{module.title}</Text>
-                                            <Text style={styles.moduleMeta}>
-                                                {pdfCount} pdfs • {videoCount} videos
-                                            </Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 }}>
+                                            <View style={styles.folderIconBadge}>
+                                                <Ionicons name="folder-open" size={20} color="#4F46E5" />
+                                            </View>
+                                            <View style={styles.moduleInfo}>
+                                                <Text style={styles.moduleTitle}>{module.title}</Text>
+                                                <Text style={styles.moduleMeta}>
+                                                    {getModuleMetaText(module.lessons)}
+                                                </Text>
+                                            </View>
                                         </View>
                                         <Ionicons
                                             name={isExpanded ? "chevron-up" : "chevron-down"}

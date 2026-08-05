@@ -1,171 +1,96 @@
 import { supabase } from './supabase';
 import { queryClient } from './queryClient';
+import { TENANT_ID } from '../utils/tenant';
 
 type ActionType = 'login' | 'video_watch' | 'lesson_completion' | 'quiz_completion' | 'module_completion' | 'referral' | 'bonus' | 'mission_complete';
 
-const REWARD_RULES = {
-    login: { coins: 5, limit: 1 },
-    video_watch: { coins: 10, limit: 10 },
-    lesson_completion: { coins: 10, limit: 20 },
-    quiz_completion: { coins: 15, limit: 10 },
-    quiz_bonus: { coins: 10, limit: 10 },
-    module_completion: { coins: 50, limit: 5 },
-    referral: { coins: 100, limit: 10 },
-    streak_3: { coins: 10, limit: 1 },
-    streak_7: { coins: 30, limit: 1 },
-    streak_30: { coins: 100, limit: 1 },
-    mission_complete: { coins: 20, limit: 3 }
-};
-
-const DAILY_COIN_CAP = 100;
-
-// Helper to get YYYY-MM-DD in local time
-const getLocalToday = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+/**
+ * Get tenant ID from environment
+ */
+const getTenantId = (): string => {
+    return TENANT_ID;
 };
 
 export const rewardService = {
     /**
-     * Get reward status for a user
+     * Get reward status for a user (RPC)
      */
     async getRewardStatus(userId: string) {
-        let { data, error } = await supabase
-            .from("user_rewards")
-            .select("*")
-            .eq("user_id", userId)
-            .single();
+        const tenantId = getTenantId();
 
-        if (error || !data) {
-            // Initialize if not exists
-            const { data: newData, error: insertError } = await supabase
-                .from("user_rewards")
-                .insert({ user_id: userId })
-                .select()
-                .single();
-
-            if (insertError) {
-                // Check if it was a race condition
-                const { data: retryData } = await supabase
-                    .from("user_rewards")
-                    .select("*")
-                    .eq("user_id", userId)
-                    .single();
-                data = retryData;
-            } else {
-                data = newData;
-            }
-        }
-        return data;
-    },
-
-    /**
-     * Award coins to a user
-     */
-    /**
-     * Award coins to a user
-     */
-    async awardCoins(userId: string, action: ActionType, entityId?: string, description?: string) {
-        const today = getLocalToday();
-
-        // 1. Check strict duplicate rules (Client-Side Protection)
-        if (action === 'login') {
-            entityId = today;
-
-            // FIX: Check user_rewards first as reward_transactions might be RLS blocked
-            const { data: userReward } = await supabase
-                .from("user_rewards")
-                .select("last_activity_date")
-                .eq("user_id", userId)
-                .single();
-
-            if (userReward?.last_activity_date === today) {
-                return { success: false, message: "Daily Reward Claimed!" };
-            }
-        }
-
-        if (entityId) {
-            let query = supabase
-                .from("reward_transactions")
-                .select("id")
-                .eq("user_id", userId)
-                .eq("action_type", action)
-                .eq("entity_id", entityId);
-
-            if (action !== 'login') {
-                const now = new Date();
-                const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-                query = query.gte("created_at", startOfDay);
-            }
-
-            const { data: existing } = await query.maybeSingle();
-
-            if (existing) {
-                return { success: false, message: "Already rewarded for this today!" };
-            }
-        }
-
-        // 2. Define Amount (DB Trigger handles exact amounts, but we send it for log)
-        let coins = 0;
-        switch (action) {
-            case 'login': coins = REWARD_RULES.login.coins; break;
-            case 'video_watch': coins = REWARD_RULES.video_watch.coins; break;
-            case 'lesson_completion': coins = REWARD_RULES.lesson_completion.coins; break;
-            case 'quiz_completion': coins = REWARD_RULES.quiz_completion.coins; break;
-            case 'module_completion': coins = REWARD_RULES.module_completion.coins; break;
-            case 'referral': coins = REWARD_RULES.referral.coins; break;
-            case 'mission_complete': coins = REWARD_RULES.mission_complete.coins; break;
-            case 'bonus': coins = 10; break;
-        }
-
-        // 3. Insert Transaction (The DB Trigger takes it from here!)
-        const { error: txError } = await supabase.from("reward_transactions").insert({
-            user_id: userId,
-            amount: coins,
-            action_type: action,
-            entity_id: entityId,
-            description: description || `Reward for ${action}`
+        const { data, error } = await supabase.rpc('get_user_rewards', {
+            p_user_id: userId,
+            p_tenant_id: tenantId
         });
 
-        if (txError) return { success: false, message: "Failed to process reward transaction" };
-
-        // 4. Post-Process (Invalidate Queries)
-        queryClient.invalidateQueries({ queryKey: ['userRewards', userId] });
-        queryClient.invalidateQueries({ queryKey: ['rewardTransactions', userId] });
-
-        if (action === 'login') {
-            return { success: true, coins, message: "Daily Reward Claimed!" };
+        if (error) {
+            console.error('Error getting user rewards:', error);
+            return null;
         }
 
-        return { success: true, coins, message: `⭐ +${coins} coins!` };
+        // RPC returns array, get first element
+        return data?.[0] || null;
     },
 
     /**
-     * Check and update user streak
+     * Award coins to a user (RPC)
      */
-    async checkStreak(userId: string) {
-        // Trigger the login reward check
-        const loginResult = await this.awardCoins(userId, 'login');
+    async awardCoins(userId: string, action: ActionType, entityId?: string, description?: string) {
+        const tenantId = getTenantId();
 
-        // Re-fetch to get updated values
-        const rewardStatus = await this.getRewardStatus(userId);
+        // Use database function - handles everything!
+        const { data, error } = await supabase.rpc('award_coins', {
+            p_user_id: userId,
+            p_tenant_id: tenantId,
+            p_action_type: action,
+            p_entity_id: entityId || null,
+            p_description: description || null
+        });
 
-        if (!rewardStatus) return { streak: 0, message: "Error" };
+        if (error) {
+            console.error('Error awarding coins:', error);
+            return { success: false, message: "Failed to process reward" };
+        }
 
-        // Return the message from the login attempt
-        const message = loginResult.success ? loginResult.message : null;
+        // Invalidate queries
+        queryClient.invalidateQueries({ queryKey: ['userRewards', userId] });
+        queryClient.invalidateQueries({ queryKey: ['rewardTransactions', userId] });
+        queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
 
-        return { streak: rewardStatus.current_streak, message };
+        return data || { success: false, message: "Unknown error" };
     },
 
+    /**
+     * Check and update user streak (RPC)
+     */
+    async checkStreak(userId: string) {
+        const tenantId = getTenantId();
+
+        // Use database function
+        const { data, error } = await supabase.rpc('get_user_streak', {
+            p_user_id: userId,
+            p_tenant_id: tenantId
+        });
+
+        if (error) {
+            console.error('Error getting streak:', error);
+            return { streak: 0, message: null };
+        }
+
+        return data || { streak: 0, message: null };
+    },
+
+    /**
+     * Check badge unlock (keep as is - no RPC needed)
+     */
     async checkBadgeUnlock(userId: string, badgeId: string) {
+        const tenantId = getTenantId();
+
         const { data: existing } = await supabase
             .from("user_badges")
             .select("*")
             .eq("user_id", userId)
+            .eq("tenant_id", tenantId)
             .eq("badge_id", badgeId)
             .single();
 
@@ -173,25 +98,42 @@ export const rewardService = {
 
         await supabase.from("user_badges").insert({
             user_id: userId,
+            tenant_id: tenantId,
             badge_id: badgeId
         });
     },
 
+    /**
+     * Check module completion and award bonus
+     */
     async checkModuleCompletion(userId: string, moduleId: string) {
-        const { data: lessons } = await supabase.from("lessons").select("id").eq("module_id", moduleId);
+        const tenantId = getTenantId();
+
+        const { data: lessons } = await supabase
+            .from("lessons")
+            .select("id")
+            .eq("module_id", moduleId);
+
         if (!lessons || lessons.length === 0) return;
 
         const { data: completed } = await supabase
             .from("lesson_progress")
             .select("lesson_id")
             .eq("user_id", userId)
+            .eq("tenant_id", tenantId)
             .eq("completed", true)
             .in("lesson_id", lessons.map(l => l.id));
 
         const completedCount = completed?.length || 0;
         if (completedCount === lessons.length) {
-            return await this.awardCoins(userId, 'module_completion', moduleId, 'Completed a module!');
+            return await this.awardCoins(
+                userId,
+                'module_completion',
+                moduleId,
+                'Completed a module!'
+            );
         }
         return null;
     }
 };
+

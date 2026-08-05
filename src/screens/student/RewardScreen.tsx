@@ -724,6 +724,36 @@ export const RewardScreen = () => {
                     </View>
                 </LinearGradient>
 
+                {/* Disclaimer */}
+                <View style={{ paddingHorizontal: spacing.md, marginBottom: spacing.md }}>
+                    <View style={{
+                        backgroundColor: colors.warning + '15',
+                        borderLeftWidth: 3,
+                        borderLeftColor: colors.warning,
+                        padding: spacing.md,
+                        borderRadius: borderRadius.md,
+                    }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs }}>
+                            <Ionicons name="information-circle" size={18} color={colors.warning} />
+                            <Text style={{
+                                ...textStyles.bodySmall,
+                                fontWeight: '700',
+                                color: colors.warning,
+                                marginLeft: spacing.xs,
+                            }}>
+                                Virtual Rewards Only
+                            </Text>
+                        </View>
+                        <Text style={{
+                            ...textStyles.caption,
+                            color: colors.textSecondary,
+                            lineHeight: 18,
+                        }}>
+                            Coins and XP are virtual rewards for leaderboard rankings, streaks, and badges. They cannot be exchanged for real money or used to purchase courses.
+                        </Text>
+                    </View>
+                </View>
+
                 {/* Calendar Strip */}
                 <View style={{ paddingHorizontal: spacing.md }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../services/supabase';
+import { TENANT_ID } from '../utils/tenant';
 
 export const useCategories = () => {
     return useQuery({
@@ -14,6 +15,7 @@ export const useCategories = () => {
             const { data, error } = await supabase
                 .from('courses')
                 .select('category')
+                .eq('tenant_id', TENANT_ID)
                 .not('category', 'is', null);
 
             if (error) {

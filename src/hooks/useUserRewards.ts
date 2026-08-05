@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../services/supabase';
 import { useCurrentUser } from './useCurrentUser';
+import { TENANT_ID } from '../utils/tenant';
 
 export interface UserRewards {
     user_id: string;
@@ -116,51 +117,31 @@ export const useLeaderboard = (type: 'weekly' | 'all_time' = 'all_time', limit: 
     return useQuery({
         queryKey: ['leaderboard', type, limit],
         queryFn: async () => {
-            // Determine sort column based on type
+            // Get tenant ID
+            const { data: tenantData } = await supabase
+                .from('tenants')
+                .select('id')
+                .limit(1)
+                .single();
+
+            const tenantId = tenantData?.id || 'f9c03969-da89-4d2e-92eb-029490268453';
+
+            // Use RPC function for optimized query
             const sortColumn = type === 'weekly' ? 'weekly_xp' : 'total_coins';
 
-            // 1. Get top rewards (fetch more to account for non-student filtering)
-            const fetchLimit = limit * 3;
-            const { data: rewards, error } = await supabase
-                .from('user_rewards')
-                .select('*')
-                .order(sortColumn, { ascending: false })
-                .limit(fetchLimit);
+            const { data, error } = await supabase.rpc('get_tenant_leaderboard', {
+                p_tenant_id: tenantId,
+                p_sort_column: sortColumn,
+                p_limit: limit
+            });
 
-            if (error) throw error;
-            if (!rewards || rewards.length === 0) return [];
+            if (error) {
+                console.error('Leaderboard RPC error:', error);
+                return [];
+            }
 
-            // 2. Get profiles for these users
-            const userIds = rewards.map(r => r.user_id);
-            const { data: profiles, error: profilesError } = await supabase
-                .from('profiles')
-                .select('id, full_name, avatar_url, role')
-                .in('id', userIds);
-
-            if (profilesError) throw profilesError;
-
-            // 3. Filter for students and merge
-            const profileMap = new Map(profiles?.map(p => [p.id, p]));
-
-            const leaderboard = rewards
-                .filter(r => {
-                    const profile = profileMap.get(r.user_id);
-                    return profile && profile.role === 'student';
-                })
-                .map((r, index) => ({
-                    user_id: r.user_id,
-                    total_coins: r.total_coins,
-                    xp: r.xp,
-                    weekly_xp: r.weekly_xp,
-                    level: r.level,
-                    full_name: profileMap.get(r.user_id)?.full_name || 'Anonymous Student',
-                    avatar_url: profileMap.get(r.user_id)?.avatar_url || '',
-                    // We recalculate rank after filtering
-                    rank: 0
-                }));
-
-            // Re-assign ranks
-            return leaderboard.slice(0, limit).map((entry, index) => ({
+            // Add rank to each entry
+            return (data || []).map((entry: any, index: number) => ({
                 ...entry,
                 rank: index + 1
             })) as LeaderboardEntry[];

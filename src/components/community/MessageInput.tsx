@@ -8,12 +8,14 @@ import {
     FlatList,
     Text,
     Image,
+    Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { spacing, borderRadius } from '../../constants/spacing';
 import { textStyles } from '../../constants/typography';
 import { useCourseUsers } from '../../hooks/useCourseUsers';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface MessageInputProps {
     onSend: (content: string) => void;
@@ -29,6 +31,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     courseId,
 }) => {
     const { colors } = useAppTheme();
+    const insets = useSafeAreaInsets();
     const [message, setMessage] = useState('');
     const [showMentions, setShowMentions] = useState(false);
     const [mentionSearch, setMentionSearch] = useState('');
@@ -36,6 +39,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     const inputRef = useRef<TextInput>(null);
 
     const { data: courseUsers = [] } = useCourseUsers(courseId);
+
+
 
     // Detect @ mentions
     useEffect(() => {
@@ -92,6 +97,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             backgroundColor: colors.surface,
             borderTopWidth: 1,
             borderTopColor: colors.border,
+            paddingBottom: Platform.OS === 'ios' ? insets.bottom : spacing.sm,
         },
         mentionsContainer: {
             maxHeight: 200,

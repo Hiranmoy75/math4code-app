@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { Platform } from 'react-native';
+import { TENANT_ID } from '../utils/tenant';
 
 const getBaseUrl = () => {
     // if (Platform.OS === 'web') {
@@ -28,6 +29,7 @@ export const api = {
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${session.access_token}`,
+                    'x-tenant-id': TENANT_ID,
                 },
                 body: JSON.stringify({
                     courseId,
@@ -141,6 +143,7 @@ export const api = {
                 .select('status')
                 .eq('user_id', user.id)
                 .eq('course_id', courseId)
+                .eq('tenant_id', TENANT_ID)
                 .eq('status', 'active')
                 .single();
 

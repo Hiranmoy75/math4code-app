@@ -6,6 +6,7 @@ import {
     FlatList,
     TouchableOpacity,
     ActivityIndicator,
+    RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,9 +23,13 @@ export const NotificationsScreen = () => {
         notifications,
         unreadCount,
         isLoading,
+        refetch,
         markAsRead,
         markAllAsRead,
         deleteNotification,
+        hasNextPage,
+        fetchNextPage,
+        isFetchingNextPage,
     } = useNotifications();
 
     const getIconName = (type: Notification['type']) => {
@@ -60,9 +65,22 @@ export const NotificationsScreen = () => {
 
         if (notification.link) {
             // Navigate to the link if provided
-            // You can implement custom navigation logic here
-
         }
+    };
+
+    const handleLoadMore = () => {
+        if (hasNextPage && !isFetchingNextPage) {
+            fetchNextPage();
+        }
+    };
+
+    const renderFooter = () => {
+        if (!isFetchingNextPage) return <View style={{ height: 20 }} />;
+        return (
+            <View style={{ padding: spacing.md, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color={colors.primary} />
+            </View>
+        );
     };
 
     const renderNotification = ({ item }: { item: Notification }) => (
@@ -93,7 +111,6 @@ export const NotificationsScreen = () => {
             {!item.is_read && <View style={styles.unreadDot} />}
         </TouchableOpacity>
     );
-
 
     const styles = StyleSheet.create({
         container: {
@@ -223,6 +240,16 @@ export const NotificationsScreen = () => {
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
+                    onEndReached={handleLoadMore}
+                    onEndReachedThreshold={0.5}
+                    removeClippedSubviews={true}
+                    initialNumToRender={15}
+                    maxToRenderPerBatch={10}
+                    windowSize={10}
+                    ListFooterComponent={renderFooter}
+                    refreshControl={
+                        <RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.primary} />
+                    }
                 />
             )}
         </SafeAreaView>

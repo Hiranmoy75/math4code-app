@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../services/supabase';
 import { Course } from '../types';
 import { useCurrentUser } from './useCurrentUser';
+import { TENANT_ID } from '../utils/tenant';
 
 export const useEnrolledCourses = () => {
     const { data: user } = useCurrentUser();
@@ -34,6 +35,7 @@ export const useEnrolledCourses = () => {
                     )
                 `)
                 .eq('user_id', user.id)
+                .eq('tenant_id', TENANT_ID)
                 .in('status', ['active', 'completed'])
                 .order('last_accessed_at', { ascending: false, nullsFirst: false });
 

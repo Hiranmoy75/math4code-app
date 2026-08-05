@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -25,6 +26,7 @@ import { MentionsScreen } from './src/screens/student/MentionsScreen';
 import { BookmarksScreen } from './src/screens/student/BookmarksScreen';
 import { LegalPageScreen } from './src/screens/legal/LegalPageScreen';
 import { ResetPasswordScreen } from './src/screens/auth/ResetPasswordScreen';
+import { UserGuideScreen } from './src/screens/student/UserGuideScreen';
 
 import { RewardScreen } from './src/screens/student/RewardScreen';
 import { supabase } from './src/services/supabase';
@@ -49,7 +51,13 @@ if (!__DEV__) {
 }
 
 const linking: LinkingOptions<RootStackParamList> = {
-  prefixes: [Linking.createURL('/'), 'math4code://', 'exp://'],
+  prefixes: [
+    Linking.createURL('/'),
+    'math4code://',
+    'exp://',
+    'https://www.math4code.com',
+    'https://math4code.com'
+  ],
   config: {
     screens: {
       Auth: {
@@ -61,6 +69,18 @@ const linking: LinkingOptions<RootStackParamList> = {
         },
       },
       PaymentStatus: 'payment/:status',
+      LessonPlayer: 'LessonPlayer',
+      CourseDetails: 'courses/:courseId',
+      ExamScreen: 'exam/:examId',
+      ResultScreen: 'result/:attemptId',
+      Main: {
+        screens: {
+          HomeTab: 'home',
+          LibraryTab: 'library',
+          CommunityTab: 'community',
+          ProfileTab: 'profile',
+        },
+      },
     },
   },
 };
@@ -208,43 +228,46 @@ export default function App() {
   }
 
   return (
-    <ThemeProvider>
-      <QueryClientProvider client={queryClient}>
-        <NavigationContainer
-          linking={linking}
-        >
-          <Stack.Navigator screenOptions={{ headerShown: false }}>
-            {isAuthenticated ? (
-              <>
-                <Stack.Screen name="Main" component={StudentNavigator} />
-                <Stack.Screen name="CourseDetails" component={CourseDetailsScreen} />
-                <Stack.Screen name="LessonPlayer" component={LessonPlayerScreen} />
-                <Stack.Screen name="ExamScreen" component={ExamScreen} />
-                <Stack.Screen name="ResultScreen" component={ResultScreen} />
-                <Stack.Screen name="QuestionAnalysisScreen" component={QuestionAnalysisScreen} />
-                <Stack.Screen name="PaymentStatus" component={PaymentStatusScreen} />
-                <Stack.Screen name="PaymentWebView" component={PaymentWebViewScreen} />
-                <Stack.Screen name="Notifications" component={NotificationsScreen} />
-                <Stack.Screen name="EditProfile" component={EditProfileScreen} />
-                <Stack.Screen name="Settings" component={SettingsScreen} />
-                <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
-                <Stack.Screen name="AIChat" component={AIChatScreen} />
-                <Stack.Screen name="AllCourses" component={CoursesScreen} />
-                <Stack.Screen name="Mentions" component={MentionsScreen} />
-                <Stack.Screen name="Bookmarks" component={BookmarksScreen} />
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <QueryClientProvider client={queryClient}>
+          <NavigationContainer
+            linking={linking}
+          >
+            <Stack.Navigator screenOptions={{ headerShown: false }}>
+              {isAuthenticated ? (
+                <>
+                  <Stack.Screen name="Main" component={StudentNavigator} />
+                  <Stack.Screen name="CourseDetails" component={CourseDetailsScreen} />
+                  <Stack.Screen name="LessonPlayer" component={LessonPlayerScreen} />
+                  <Stack.Screen name="ExamScreen" component={ExamScreen} />
+                  <Stack.Screen name="ResultScreen" component={ResultScreen} />
+                  <Stack.Screen name="QuestionAnalysisScreen" component={QuestionAnalysisScreen} />
+                  <Stack.Screen name="PaymentStatus" component={PaymentStatusScreen} />
+                  <Stack.Screen name="PaymentWebView" component={PaymentWebViewScreen} />
+                  <Stack.Screen name="Notifications" component={NotificationsScreen} />
+                  <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+                  <Stack.Screen name="Settings" component={SettingsScreen} />
+                  <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
+                  <Stack.Screen name="UserGuide" component={UserGuideScreen} />
+                  <Stack.Screen name="AIChat" component={AIChatScreen} />
+                  <Stack.Screen name="AllCourses" component={CoursesScreen} />
+                  <Stack.Screen name="Mentions" component={MentionsScreen} />
+                  <Stack.Screen name="Bookmarks" component={BookmarksScreen} />
 
-                <Stack.Screen name="LegalPage" component={LegalPageScreen} />
-                <Stack.Screen name="RewardScreen" component={RewardScreen} />
-                <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
-              </>
-            ) : (
-              <Stack.Screen name="Auth" component={AuthNavigator} />
-            )}
-          </Stack.Navigator>
-        </NavigationContainer>
-        <Toast />
-      </QueryClientProvider>
-    </ThemeProvider>
+                  <Stack.Screen name="LegalPage" component={LegalPageScreen} />
+                  <Stack.Screen name="RewardScreen" component={RewardScreen} />
+                  <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+                </>
+              ) : (
+                <Stack.Screen name="Auth" component={AuthNavigator} />
+              )}
+            </Stack.Navigator>
+          </NavigationContainer>
+          <Toast />
+        </QueryClientProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }
 

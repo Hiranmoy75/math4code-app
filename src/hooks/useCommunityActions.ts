@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../services/supabase';
 import Toast from 'react-native-toast-message';
+import { TENANT_ID } from '../utils/tenant';
 
 export const useSendMessage = (channelId: string | null) => {
     const queryClient = useQueryClient();
@@ -19,6 +20,7 @@ export const useSendMessage = (channelId: string | null) => {
                     user_id: user.id,
                     content,
                     attachments: [],
+                    tenant_id: TENANT_ID,
                 })
                 .select(`
                     *,
@@ -67,6 +69,7 @@ export const useSendMessage = (channelId: string | null) => {
                     role: user.user_metadata?.role || 'student',
                 },
                 community_reactions: [],
+                tenant_id: TENANT_ID,
             };
 
             queryClient.setQueryData(['community', 'messages', channelId], (old: any) => {
@@ -143,6 +146,7 @@ export const useToggleReaction = () => {
                         message_id: messageId,
                         user_id: user.id,
                         emoji,
+                        tenant_id: TENANT_ID,
                     });
                 if (error) throw error;
             }

@@ -28,115 +28,101 @@ export const PaymentWebViewScreen = () => {
     const [isVerifying, setIsVerifying] = useState(false);
     const [browserResult, setBrowserResult] = useState<WebBrowser.WebBrowserResult | null>(null);
 
-    // Open WebBrowser immediately on mount and listen for deep links
+    // Polling for payment status
     useEffect(() => {
-        openPaymentBrowser();
+        let pollInterval: NodeJS.Timeout;
+        let isPolling = true;
 
-        // Listen for deep links (redirect from payment gateway)
-        const handleDeepLink = (event: { url: string }) => {
-            const url = event.url;
-            // Server redirects to: math4code://payment/verify?txnId=...&status=...
-            if (url && url.includes('payment/verify')) {
-                // Close the browser if it's open
-                WebBrowser.dismissBrowser();
+        const checkStatus = async () => {
+            if (!isPolling) return;
 
-                // Auto-verify
-                handlePaymentVerification();
+            try {
+                console.log('[PAYMENT] Polling status...');
+                const response = await api.checkPaymentStatus(transactionId);
+
+                if (response.status === 'success') {
+                    console.log('[PAYMENT] Polling success! Navigating...');
+                    isPolling = false;
+                    clearInterval(pollInterval);
+
+                    // Close browser if open
+                    WebBrowser.dismissBrowser();
+
+                    // Navigate directly to Library
+                    navigation.dispatch(
+                        CommonActions.reset({
+                            index: 0,
+                            routes: [
+                                { name: 'Main' },
+                                { name: 'LibraryTab' }
+                            ],
+                        })
+                    );
+                }
+            } catch (error) {
+                // Silent failure on polling errors, just retry
+                console.log('[PAYMENT] Polling checking...', error);
             }
         };
 
-        const subscription = Linking.addEventListener('url', handleDeepLink);
+        // Start polling after 5 seconds to give user time to interact
+        const startPolling = setTimeout(() => {
+            console.log('[PAYMENT] Starting polling...');
+            pollInterval = setInterval(checkStatus, 3000);
+        }, 5000);
 
         return () => {
-            subscription.remove();
+            isPolling = false;
+            clearTimeout(startPolling);
+            if (pollInterval) clearInterval(pollInterval);
+        };
+    }, [transactionId, navigation]);
+
+    // Open WebBrowser immediately on mount and listen for deep links
+    useEffect(() => {
+        console.log('[PAYMENT] Screen mounted, opening browser...');
+        openPaymentBrowser();
+
+        return () => {
+            // Cleanup if needed
         };
     }, []);
 
     const openPaymentBrowser = async () => {
         try {
-            // Open the payment URL in the system browser (Chrome Custom Tabs / Safari View Controller)
-            // This bypasses WebView restrictions like INTERNAL_SECURITY_BLOCK_1
-            const result = await WebBrowser.openBrowserAsync(paymentUrl, {
+            console.log('[PAYMENT] Opening payment URL:', paymentUrl);
+            await WebBrowser.openBrowserAsync(paymentUrl, {
                 presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
                 toolbarColor: colors.primary,
                 controlsColor: colors.surface,
                 dismissButtonStyle: 'close',
             });
-
-            setBrowserResult(result);
-
-            // If the user closed the browser manually (result.type === 'cancel' or 'dismiss'),
-            // we should check if the payment was actually successful in the background.
-            if (result.type === 'cancel' || result.type === 'dismiss') {
-                // Optional: Auto-verify on return if user closed it
-                // But let's leave it to manual "Verify" button or explicit deep link for now to avoid spam
-            }
+            // Browser closed manually or by code
         } catch (error) {
-            console.error("Failed to open browser:", error);
+            console.error("[PAYMENT] Failed to open browser:", error);
             Alert.alert("Error", "Could not open payment page.");
         }
     };
 
     const handlePaymentVerification = async () => {
         setIsVerifying(true);
-
-        // Function to attempt verification with retries
-        const verifyWithRetry = async (attemptsLeft: number): Promise<any> => {
-            try {
-                return await api.verifyPayment(transactionId, courseId);
-            } catch (error) {
-                if (attemptsLeft > 0) {
-                    // Wait 2 seconds and retry
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                    return verifyWithRetry(attemptsLeft - 1);
-                }
-                throw error;
-            }
-        };
-
         try {
-            // Attempt verification
-            const response = await verifyWithRetry(2);
-
-            if (response.success) {
-                Alert.alert(
-                    "Success",
-                    "Payment successful! You are now enrolled.",
-                    [{
-                        text: "Go to Library",
-                        onPress: () => {
-                            navigation.dispatch(
-                                CommonActions.reset({
-                                    index: 0,
-                                    routes: [
-                                        { name: 'Main' },
-                                        { name: 'LibraryTab' }
-                                    ],
-                                })
-                            );
-                        }
-                    }]
+            const response = await api.checkPaymentStatus(transactionId);
+            if (response.status === 'success') {
+                navigation.dispatch(
+                    CommonActions.reset({
+                        index: 0,
+                        routes: [
+                            { name: 'Main' },
+                            { name: 'LibraryTab' }
+                        ],
+                    })
                 );
             } else {
-                throw new Error(response.message || 'Payment verification failed');
+                Alert.alert("Status", "Payment not yet verified. Please wait a moment or try again.");
             }
-        } catch (error: any) {
-            console.error('Payment verification error:', error);
-            let errorMessage = "We couldn't verify your payment.";
-            if (error.message) errorMessage = error.message;
-
-            Alert.alert(
-                "Payment Status",
-                `${errorMessage}\n\nIf you completed the payment, please try verifying again.`,
-                [{
-                    text: "Retry Verification",
-                    onPress: () => handlePaymentVerification()
-                }, {
-                    text: "Close",
-                    style: "cancel",
-                    onPress: () => navigation.goBack()
-                }]
-            );
+        } catch (error) {
+            Alert.alert("Error", "Could not verify payment status. Please try again.");
         } finally {
             setIsVerifying(false);
         }

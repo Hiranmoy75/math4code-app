@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../services/supabase';
 import Toast from 'react-native-toast-message';
+import { TENANT_ID } from '../utils/tenant';
 
 export const useToggleBookmark = (channelId: string | null) => {
     const queryClient = useQueryClient();
@@ -39,6 +40,7 @@ export const useToggleBookmark = (channelId: string | null) => {
                     .insert({
                         user_id: user.id,
                         message_id: messageId,
+                        tenant_id: TENANT_ID,
                     });
 
                 if (error) {

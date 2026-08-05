@@ -7,10 +7,14 @@ import {
     ActivityIndicator,
     TouchableOpacity,
     RefreshControl,
+    TextInput,
+    StatusBar,
+    KeyboardAvoidingView,
+    Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { spacing, borderRadius } from '../../constants/spacing';
 import { textStyles } from '../../constants/typography';
@@ -24,11 +28,15 @@ import { supabase } from '../../services/supabase';
 
 export const CommunityScreen = () => {
     const navigation = useNavigation<any>();
+    const route = useRoute<any>();
+    const passedCourseId = route.params?.courseId;
     const { colors, shadows } = useAppTheme();
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
     const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
     const [currentUserId, setCurrentUserId] = useState<string>('');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [showSearch, setShowSearch] = useState(false);
     const flatListRef = useRef<FlatList>(null);
 
     // Fetch enrolled courses with channels
@@ -54,20 +62,33 @@ export const CommunityScreen = () => {
         });
     }, []);
 
-    // Auto-select first channel when courses load
+    // Auto-select target course channel (if navigated from CourseDetails) or first channel
     useEffect(() => {
-        if (courses && courses.length > 0 && !activeChannelId) {
+        if (!courses || courses.length === 0) return;
+
+        if (passedCourseId) {
+            const targetCourse = courses.find(c => c.id === passedCourseId);
+            if (targetCourse && targetCourse.channels && targetCourse.channels.length > 0) {
+                setActiveChannelId(targetCourse.channels[0].id);
+                setActiveCourseId(targetCourse.id);
+                return;
+            }
+        }
+
+        if (!activeChannelId) {
             const firstCourse = courses[0];
             if (firstCourse.channels && firstCourse.channels.length > 0) {
                 setActiveChannelId(firstCourse.channels[0].id);
                 setActiveCourseId(firstCourse.id);
             }
         }
-    }, [courses, activeChannelId]);
+    }, [courses, passedCourseId]);
 
     const handleSelectChannel = (channelId: string, courseId: string) => {
         setActiveChannelId(channelId);
         setActiveCourseId(courseId);
+        setSearchQuery('');
+        setShowSearch(false);
     };
 
     const handleSendMessage = (content: string) => {
@@ -99,16 +120,24 @@ export const CommunityScreen = () => {
     }, []);
 
     // Flatten messages from all pages and reverse to show newest at bottom
-    const messages = messagesData?.pages.flat().reverse() || [];
+    const allMessages = messagesData?.pages.flat().reverse() || [];
+
+    // Filter messages based on search query
+    const messages = searchQuery.trim()
+        ? allMessages.filter(msg =>
+            msg.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            msg.profiles?.full_name?.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+        : allMessages;
 
     // Auto-scroll to bottom when new messages arrive
     useEffect(() => {
-        if (messages.length > 0 && flatListRef.current) {
+        if (messages.length > 0 && flatListRef.current && !searchQuery) {
             setTimeout(() => {
                 flatListRef.current?.scrollToEnd({ animated: true });
             }, 100);
         }
-    }, [messages.length]);
+    }, [messages.length, searchQuery]);
 
     // Get active channel name
     const activeChannel = courses
@@ -135,6 +164,29 @@ export const CommunityScreen = () => {
             borderBottomColor: colors.border,
             backgroundColor: colors.surface,
             ...shadows.small,
+        },
+        searchHeader: {
+            paddingHorizontal: spacing.md,
+            paddingVertical: spacing.sm,
+            backgroundColor: colors.surface,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+        },
+        searchInput: {
+            backgroundColor: colors.background,
+            borderRadius: borderRadius.full,
+            paddingHorizontal: spacing.md,
+            paddingVertical: spacing.sm,
+            ...textStyles.body,
+            color: colors.text,
+            borderWidth: 1,
+            borderColor: colors.border,
+        },
+        searchResultText: {
+            ...textStyles.caption,
+            color: colors.textSecondary,
+            marginTop: spacing.xs,
+            textAlign: 'center',
         },
         menuButton: {
             padding: spacing.sm,
@@ -304,6 +356,7 @@ export const CommunityScreen = () => {
     if (coursesLoading) {
         return (
             <SafeAreaView style={styles.container} edges={['top']}>
+                <StatusBar barStyle="dark-content" backgroundColor={colors.surface} />
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color={colors.primary} />
                     <Text style={styles.loadingText}>Loading community...</Text>
@@ -316,6 +369,7 @@ export const CommunityScreen = () => {
     if (coursesError) {
         return (
             <SafeAreaView style={styles.container} edges={['top']}>
+                <StatusBar barStyle="dark-content" backgroundColor={colors.surface} />
                 <View style={styles.errorContainer}>
                     <Ionicons name="alert-circle" size={64} color={colors.error} />
                     <Text style={styles.errorText}>Failed to load community</Text>
@@ -331,6 +385,7 @@ export const CommunityScreen = () => {
     if (!courses || courses.length === 0) {
         return (
             <SafeAreaView style={styles.container} edges={['top']}>
+                <StatusBar barStyle="dark-content" backgroundColor={colors.surface} />
                 <View style={styles.emptyContainer}>
                     <View style={styles.emptyIllustration}>
                         <View style={[styles.illustrationCircle, { backgroundColor: '#FEF3C7' }]}>
@@ -364,137 +419,176 @@ export const CommunityScreen = () => {
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
-            {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity
-                    style={styles.menuButton}
-                    onPress={() => setSidebarOpen(true)}
-                >
-                    <Ionicons name="menu" size={24} color={colors.text} />
-                </TouchableOpacity>
-                <View style={styles.headerContent}>
-                    <Text style={styles.channelName}>
-                        #{activeChannel?.name || 'Community'}
-                    </Text>
-                    {activeCourse && (
-                        <Text style={styles.courseName} numberOfLines={1}>
-                            {activeCourse.title}
-                        </Text>
-                    )}
-                </View>
-                <View style={styles.headerActions}>
-                    <TouchableOpacity
-                        style={styles.headerButton}
-                        onPress={() => {/* TODO: Add search functionality */ }}
-                    >
-                        <Ionicons name="search" size={22} color={colors.text} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={styles.headerButton}
-                        onPress={() => navigation.navigate('HomeTab')}
-                    >
-                        <Ionicons name="close" size={26} color={colors.text} />
-                    </TouchableOpacity>
-                </View>
-            </View>
+            <StatusBar barStyle="dark-content" backgroundColor={colors.surface} />
 
-            {/* Messages List */}
-            {!activeChannelId ? (
-                <View style={styles.emptyContainer}>
-                    <View style={styles.emptyIllustration}>
-                        <View style={[styles.illustrationCircle, { backgroundColor: colors.primary + '20' }]}>
-                            <View style={[styles.illustrationCircle, { backgroundColor: colors.primary + '40', width: 100, height: 100 }]}>
-                                <Ionicons name="chatbubbles" size={50} color={colors.primary} />
-                            </View>
-                        </View>
-                    </View>
-                    <Text style={styles.emptyTitle}>Select a Channel</Text>
-                    <Text style={styles.emptyText}>
-                        Choose a channel from the menu to start chatting with your instructors and peers
-                    </Text>
+            {/* Keyboard Handling */}
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            >
+                {/* Header */}
+                <View style={styles.header}>
                     <TouchableOpacity
-                        style={styles.emptyButton}
+                        style={styles.menuButton}
                         onPress={() => setSidebarOpen(true)}
                     >
-                        <Ionicons name="menu" size={20} color={colors.textInverse} />
-                        <Text style={styles.emptyButtonText}>Browse Channels</Text>
+                        <Ionicons name="menu" size={24} color={colors.text} />
                     </TouchableOpacity>
-                </View>
-            ) : messagesLoading ? (
-                <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color={colors.primary} />
-                    <Text style={styles.loadingText}>Loading messages...</Text>
-                </View>
-            ) : messages.length === 0 ? (
-                <View style={styles.emptyContainer}>
-                    <View style={styles.emptyIllustration}>
-                        <View style={[styles.illustrationCircle, { backgroundColor: '#DBEAFE' }]}>
-                            <View style={[styles.illustrationCircle, { backgroundColor: '#93C5FD', width: 100, height: 100 }]}>
-                                <Ionicons name="chatbubble-ellipses" size={50} color="#3B82F6" />
-                            </View>
-                        </View>
+                    <View style={styles.headerContent}>
+                        <Text style={styles.channelName}>
+                            #{activeChannel?.name || 'Community'}
+                        </Text>
+                        {activeCourse && (
+                            <Text style={styles.courseName} numberOfLines={1}>
+                                {activeCourse.title}
+                            </Text>
+                        )}
                     </View>
-                    <Text style={styles.emptyTitle}>No Messages Yet</Text>
-                    <Text style={styles.emptyText}>
-                        Be the first to start the conversation! Share your thoughts, ask questions, or say hello.
-                    </Text>
-                    <View style={styles.emptyBadges}>
-                        <View style={styles.emptyBadge}>
-                            <Ionicons name="people" size={16} color={colors.primary} />
-                            <Text style={styles.emptyBadgeText}>Community</Text>
-                        </View>
-                        <View style={styles.emptyBadge}>
-                            <Ionicons name="shield-checkmark" size={16} color="#10B981" />
-                            <Text style={styles.emptyBadgeText}>Safe Space</Text>
-                        </View>
+                    <View style={styles.headerActions}>
+                        <TouchableOpacity
+                            style={styles.headerButton}
+                            onPress={() => setShowSearch(!showSearch)}
+                        >
+                            <Ionicons name="search" size={22} color={colors.text} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.headerButton}
+                            onPress={() => navigation.navigate('HomeTab')}
+                        >
+                            <Ionicons name="close" size={26} color={colors.text} />
+                        </TouchableOpacity>
                     </View>
                 </View>
-            ) : (
-                <FlatList
-                    ref={flatListRef}
-                    data={messages}
-                    keyExtractor={(item) => item.id}
-                    renderItem={({ item }) => (
-                        <MessageCard message={item} currentUserId={currentUserId} channelId={activeChannelId} />
-                    )}
-                    style={styles.messagesList}
-                    contentContainerStyle={styles.messagesContent}
-                    onEndReached={handleLoadMore}
-                    onEndReachedThreshold={0.5}
-                    refreshControl={
-                        <RefreshControl
-                            refreshing={false}
-                            onRefresh={refetchMessages}
-                            tintColor={colors.primary}
-                        />
-                    }
-                    ListFooterComponent={
-                        isFetchingNextPage ? (
-                            <View style={styles.loadMoreContainer}>
-                                <ActivityIndicator size="small" color={colors.primary} />
-                                <Text style={styles.loadMoreText}>Loading more...</Text>
-                            </View>
-                        ) : null
-                    }
-                />
-            )}
 
-            {/* Message Input */}
-            {activeChannelId && (
-                canSendMessage ? (
-                    <MessageInput
-                        onSend={handleSendMessage}
-                        isSending={isSending}
-                        disabled={!activeChannelId}
-                        courseId={activeCourseId}
-                    />
-                ) : (
-                    <View style={styles.lockedInput}>
-                        <Ionicons name="lock-closed" size={20} color={colors.textSecondary} />
-                        <Text style={styles.lockedText}>Only admins can send messages here</Text>
+                {/* Search Bar */}
+                {showSearch && (
+                    <View style={styles.searchHeader}>
+                        <TextInput
+                            style={styles.searchInput}
+                            placeholder="Search messages..."
+                            placeholderTextColor={colors.textSecondary}
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                            autoFocus
+                        />
+                        {searchQuery.trim() && (
+                            <Text style={styles.searchResultText}>
+                                {messages.length} result{messages.length !== 1 ? 's' : ''} found
+                            </Text>
+                        )}
                     </View>
-                )
-            )}
+                )}
+
+                {/* Messages List */}
+                {!activeChannelId ? (
+                    <View style={styles.emptyContainer}>
+                        <View style={styles.emptyIllustration}>
+                            <View style={[styles.illustrationCircle, { backgroundColor: colors.primary + '20' }]}>
+                                <View style={[styles.illustrationCircle, { backgroundColor: colors.primary + '40', width: 100, height: 100 }]}>
+                                    <Ionicons name="chatbubbles" size={50} color={colors.primary} />
+                                </View>
+                            </View>
+                        </View>
+                        <Text style={styles.emptyTitle}>Select a Channel</Text>
+                        <Text style={styles.emptyText}>
+                            Choose a channel from the menu to start chatting with your instructors and peers
+                        </Text>
+                        <TouchableOpacity
+                            style={styles.emptyButton}
+                            onPress={() => setSidebarOpen(true)}
+                        >
+                            <Ionicons name="menu" size={20} color={colors.textInverse} />
+                            <Text style={styles.emptyButtonText}>Browse Channels</Text>
+                        </TouchableOpacity>
+                    </View>
+                ) : messagesLoading ? (
+                    <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="large" color={colors.primary} />
+                        <Text style={styles.loadingText}>Loading messages...</Text>
+                    </View>
+                ) : messages.length === 0 ? (
+                    <View style={styles.emptyContainer}>
+                        <View style={styles.emptyIllustration}>
+                            <View style={[styles.illustrationCircle, { backgroundColor: '#DBEAFE' }]}>
+                                <View style={[styles.illustrationCircle, { backgroundColor: '#93C5FD', width: 100, height: 100 }]}>
+                                    <Ionicons name="chatbubble-ellipses" size={50} color="#3B82F6" />
+                                </View>
+                            </View>
+                        </View>
+                        <Text style={styles.emptyTitle}>
+                            {searchQuery ? 'No Results Found' : 'No Messages Yet'}
+                        </Text>
+                        <Text style={styles.emptyText}>
+                            {searchQuery
+                                ? `No messages found matching "${searchQuery}"`
+                                : 'Be the first to start the conversation! Share your thoughts, ask questions, or say hello.'
+                            }
+                        </Text>
+                        {!searchQuery && (
+                            <View style={styles.emptyBadges}>
+                                <View style={styles.emptyBadge}>
+                                    <Ionicons name="people" size={16} color={colors.primary} />
+                                    <Text style={styles.emptyBadgeText}>Community</Text>
+                                </View>
+                                <View style={styles.emptyBadge}>
+                                    <Ionicons name="shield-checkmark" size={16} color="#10B981" />
+                                    <Text style={styles.emptyBadgeText}>Safe Space</Text>
+                                </View>
+                            </View>
+                        )}
+                    </View>
+                ) : (
+                    <FlatList
+                        ref={flatListRef}
+                        data={messages}
+                        keyExtractor={(item) => item.id}
+                        renderItem={({ item }) => (
+                            <MessageCard message={item} currentUserId={currentUserId} channelId={activeChannelId} />
+                        )}
+                        style={styles.messagesList}
+                        contentContainerStyle={styles.messagesContent}
+                        onEndReached={handleLoadMore}
+                        onEndReachedThreshold={0.5}
+                        removeClippedSubviews={true}
+                        initialNumToRender={20}
+                        maxToRenderPerBatch={10}
+                        windowSize={10}
+                        refreshControl={
+                            <RefreshControl
+                                refreshing={false}
+                                onRefresh={refetchMessages}
+                                tintColor={colors.primary}
+                            />
+                        }
+                        ListFooterComponent={
+                            isFetchingNextPage ? (
+                                <View style={styles.loadMoreContainer}>
+                                    <ActivityIndicator size="small" color={colors.primary} />
+                                    <Text style={styles.loadMoreText}>Loading more...</Text>
+                                </View>
+                            ) : null
+                        }
+                    />
+                )}
+
+                {/* Message Input */}
+                {activeChannelId && !showSearch && (
+                    canSendMessage ? (
+                        <MessageInput
+                            onSend={handleSendMessage}
+                            isSending={isSending}
+                            disabled={!activeChannelId}
+                            courseId={activeCourseId}
+                        />
+                    ) : (
+                        <View style={styles.lockedInput}>
+                            <Ionicons name="lock-closed" size={20} color={colors.textSecondary} />
+                            <Text style={styles.lockedText}>Only admins can send messages here</Text>
+                        </View>
+                    )
+                )}
+            </KeyboardAvoidingView>
 
             {/* Sidebar */}
             <ChannelSidebar

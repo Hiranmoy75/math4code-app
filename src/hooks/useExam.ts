@@ -1,283 +1,254 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../services/supabase';
-import { Exam, Section, Question, ExamAttempt, Result } from '../types';
+import { Exam, Section, Question, ExamAttempt, Option } from '../types';
+
+// ✅ PERF: Cache tenant_id per attemptId to avoid extra DB call on each answer save
+const tenantIdCache = new Map<string, string>();
 
 export const useExam = (examId?: string) => {
     const queryClient = useQueryClient();
 
-    const fetchExamDetails = async () => {
-        if (!examId) return null;
+    // -------------------------------------------------------------
+    // 1. ROBUST SESSION FETCH (Parallel)
+    // -------------------------------------------------------------
+    const fetchExamSession = async (studentId: string) => {
+        if (!examId) throw new Error("No Exam ID");
 
-        const { data, error } = await supabase
-            .from('exams')
-            .select('*')
-            .eq('id', examId)
-            .single();
+        // We fetch everything in parallel for speed
+        const [
+            examResult,
+            sectionsResult,
+            attemptsResult
+        ] = await Promise.all([
+            // 1. Exam Details
+            supabase.from('exams').select('*').eq('id', examId).single(),
+            // 2. Sections & Questions
+            supabase.from('sections')
+                .select('*, questions(*, options(*))')
+                .eq('exam_id', examId)
+                .order('section_order')
+                .order('question_order', { referencedTable: 'questions' }),
+            // 3. Existing Attempts for this user
+            supabase.from('exam_attempts')
+                .select('*')
+                .eq('exam_id', examId)
+                .eq('student_id', studentId)
+                .order('created_at', { ascending: false })
+        ]);
 
-        if (error) throw error;
-        return data as Exam;
+        if (examResult.error) throw examResult.error;
+        if (sectionsResult.error) throw sectionsResult.error;
+
+        const exam = examResult.data as Exam;
+        let sections = (sectionsResult.data || []) as Section[];
+        const attempts = (attemptsResult.data || []) as ExamAttempt[];
+
+        // --- Shuffle Logic ---
+        sections = sections.map((section: any) => {
+            // Sort options first (always sort options)
+            let questions = (section.questions || []).map((q: any) => ({
+                ...q,
+                options: q.options?.sort((a: any, b: any) => a.option_order - b.option_order) || []
+            }));
+
+            // Shuffle questions if enabled (DISABLED for stability - prevents re-shuffle on refetch)
+            // if (section.shuffle_questions) {
+            //     for (let i = questions.length - 1; i > 0; i--) {
+            //         const j = Math.floor(Math.random() * (i + 1));
+            //         [questions[i], questions[j]] = [questions[j], questions[i]];
+            //     }
+            // } else {
+            questions.sort((a: any, b: any) => (a.question_order || 0) - (b.question_order || 0));
+            // }
+
+            return { ...section, questions };
+        });
+
+        // --- Attempt Identification ---
+        // Find existing in-progress or latest submitted
+        const inProgress = attempts.find(a => a.status === 'in_progress');
+
+        let activeAttempt = inProgress || null;
+        let previousResponses = {};
+
+        // If we found an attempt (even submitted, if we need it for review later), fetch responses
+        if (activeAttempt) {
+            const { data: responses } = await supabase
+                .from('responses')
+                .select('question_id, student_answer, is_marked_for_review')
+                .eq('attempt_id', activeAttempt.id);
+
+            if (responses) {
+                const map: any = {};
+                responses.forEach(r => {
+                    // Try parsing JSON if valid, else string
+                    try {
+                        map[r.question_id] = JSON.parse(r.student_answer || '');
+                    } catch {
+                        map[r.question_id] = r.student_answer;
+                    }
+                });
+                previousResponses = map;
+            }
+        }
+
+        return {
+            exam,
+            sections,
+            activeAttempt,
+            previousResponses,
+            attemptsCount: attempts.length
+        };
     };
 
-    const fetchExamQuestions = async () => {
-        if (!examId) return null;
-
-        // Fetch sections with questions and options
-        const { data: sections, error } = await supabase
-            .from('sections')
-            .select(`
-                *,
-                questions (
-                    *,
-                    options (*)
-                )
-            `)
-            .eq('exam_id', examId)
-            .order('section_order', { ascending: true });
-
-        if (error) throw error;
-
-        // Sort questions and options
-        const sortedSections = sections.map((section: any) => ({
-            ...section,
-            questions: section.questions
-                .sort((a: any, b: any) => (a.question_order || 0) - (b.question_order || 0))
-                .map((question: any) => ({
-                    ...question,
-                    options: question.options.sort((a: any, b: any) => a.option_order - b.option_order)
-                }))
-        }));
-
-        return sortedSections as Section[];
-    };
-
+    // -------------------------------------------------------------
+    // 2. CHECK ELIGIBILITY
+    // -------------------------------------------------------------
     const checkExamEligibility = async (studentId: string) => {
+        // Re-using logic mostly, but refined
         if (!examId) return { eligible: false, message: "Invalid Exam ID" };
 
-        const { data: exam, error: examError } = await supabase
-            .from('exams')
-            .select('max_attempts, start_time, end_time')
-            .eq('id', examId)
-            .single();
+        const { data: exam, error } = await supabase.from('exams').select('max_attempts, start_time, end_time').eq('id', examId).single();
+        if (error || !exam) return { eligible: false, message: "Exam not found" };
 
-        if (examError) throw examError;
-
-        // Check exam date/time availability
         const now = new Date();
+        if (exam.start_time && now < new Date(exam.start_time)) return { eligible: false, reason: 'upcoming', message: `Available from ${new Date(exam.start_time).toLocaleString()}` };
+        if (exam.end_time && now > new Date(exam.end_time)) return { eligible: false, reason: 'expired', message: "Exam Expired" };
 
-        if (exam.start_time) {
-            const startTime = new Date(exam.start_time);
-            if (now < startTime) {
-                return {
-                    eligible: false,
-                    reason: 'upcoming',
-                    message: `This exam will be available from ${startTime.toLocaleString()}`,
-                    startTime: startTime
-                };
-            }
-        }
-
-        if (exam.end_time) {
-            const endTime = new Date(exam.end_time);
-            if (now > endTime) {
-                return {
-                    eligible: false,
-                    reason: 'expired',
-                    message: `This exam ended on ${endTime.toLocaleString()}`,
-                    endTime: endTime
-                };
-            }
-        }
-
-        // Check LESSON-based prerequisite (quiz lessons only)
-        // 1. Find the lesson containing this exam
-        const { data: currentLesson } = await supabase
-            .from('lessons')
-            .select('id, title, prerequisite_lesson_id, sequential_unlock_enabled, content_type, exam_id')
-            .eq('exam_id', examId)
-            .eq('content_type', 'quiz')
-            .limit(1)
-            .maybeSingle();
-
-        // 2. Check if this lesson has sequential unlock enabled and a prerequisite
-        if (currentLesson?.sequential_unlock_enabled &&
-            currentLesson.prerequisite_lesson_id &&
-            currentLesson.prerequisite_lesson_id !== currentLesson.id) {
-
-            // 3. Get the prerequisite lesson and its exam
-            const { data: prereqLesson } = await supabase
-                .from('lessons')
-                .select('id, title, exam_id')
-                .eq('id', currentLesson.prerequisite_lesson_id)
-                .single();
-
-            if (prereqLesson?.exam_id) {
-                // Safeguard: If the prerequisite points to the SAME exam, ignore it
-                if (prereqLesson.exam_id !== examId) {
-                    // 4. Check if student has completed the prerequisite lesson's exam
-                    const { data: prerequisiteAttempts } = await supabase
-                        .from('exam_attempts')
-                        .select('id, status')
-                        .eq('exam_id', prereqLesson.exam_id)
-                        .eq('student_id', studentId)
-                        .eq('status', 'submitted');
-
-                    if (!prerequisiteAttempts || prerequisiteAttempts.length === 0) {
-                        return {
-                            eligible: false,
-                            reason: 'prerequisite',
-                            message: 'You must complete the previous quiz first',
-                            prerequisiteTitle: prereqLesson.title || 'Previous Quiz'
-                        };
-                    }
-                }
-            }
-        }
-
-        // Check max attempts
+        // Check Max Attempts
         if (exam.max_attempts) {
-            const { count, error: countError } = await supabase
+            const { count } = await supabase
                 .from('exam_attempts')
                 .select('*', { count: 'exact', head: true })
                 .eq('exam_id', examId)
                 .eq('student_id', studentId)
                 .eq('status', 'submitted');
 
-            if (countError) throw countError;
-
             if ((count || 0) >= exam.max_attempts) {
-                return { eligible: false, message: `You have used all ${exam.max_attempts} attempts.` };
+                return { eligible: false, message: "Max attempts reached" };
             }
-            return { eligible: true, remainingAttempts: exam.max_attempts - (count || 0) };
         }
 
-        return { eligible: true, remainingAttempts: Infinity };
+        return { eligible: true };
     };
 
+    // -------------------------------------------------------------
+    // 3. START ATTEMPT (Updated for Pause logic)
+    // -------------------------------------------------------------
     const startAttempt = async (studentId: string) => {
-        if (!examId) throw new Error("Exam ID is required");
+        if (!studentId) throw new Error("Student ID is required");
+        // Get Tenant ID First
+        const { data: examData } = await supabase.from('exams').select('tenant_id').eq('id', examId).single();
+        const tenantId = examData?.tenant_id;
 
-        // Check for existing in-progress attempt
-        const { data: existingAttempt } = await supabase
-            .from('exam_attempts')
+        // Check existing first (concurrency safety)
+        const { data: existing } = await supabase.from('exam_attempts')
             .select('*')
             .eq('exam_id', examId)
             .eq('student_id', studentId)
             .eq('status', 'in_progress')
             .maybeSingle();
 
-        if (existingAttempt) {
-            return existingAttempt as ExamAttempt;
+        if (existing) {
+            // RESUME LOGIC: If paused, we might update last_activity or is_paused=false here
+            if (existing.is_paused) {
+                await supabase.from('exam_attempts').update({
+                    is_paused: false,
+                    last_activity_at: new Date().toISOString()
+                }).eq('id', existing.id);
+                return { ...existing, is_paused: false };
+            }
+            return existing;
         }
 
-        const { data, error } = await supabase
-            .from('exam_attempts')
-            .insert({
-                exam_id: examId,
-                student_id: studentId,
-                status: 'in_progress',
-                started_at: new Date().toISOString(),
-            })
-            .select()
-            .single();
+        const { data, error } = await supabase.from('exam_attempts').insert({
+            tenant_id: tenantId,
+            exam_id: examId,
+            student_id: studentId,
+            status: 'in_progress',
+            started_at: new Date().toISOString(),
+            total_time_spent: 0,
+            elapsed_time_seconds: 0,
+            last_activity_at: new Date().toISOString(),
+            is_paused: false
+        }).select().single();
 
         if (error) throw error;
         return data as ExamAttempt;
     };
 
-    const saveResponse = async ({ attemptId, questionId, answer, isMarkedForReview }: {
-        attemptId: string,
-        questionId: string,
-        answer: any,
-        isMarkedForReview?: boolean
-    }) => {
-        // Handle array answers for MSQ
-        const studentAnswer = Array.isArray(answer) ? JSON.stringify(answer) : String(answer);
+    // -------------------------------------------------------------
+    // 4. SYNC TIMER / PAUSE
+    // -------------------------------------------------------------
+    const updateTimer = async ({ attemptId, elapsedSeconds, isPaused }: { attemptId: string, elapsedSeconds: number, isPaused?: boolean }) => {
+        const update: any = {
+            elapsed_time_seconds: Math.floor(elapsedSeconds),
+            total_time_spent: Math.floor(elapsedSeconds),
+            last_activity_at: new Date().toISOString()
+        };
+        if (isPaused !== undefined) update.is_paused = isPaused;
 
-        // Check if response exists
-        const { data: existingResponse } = await supabase
-            .from('responses')
-            .select('id')
-            .eq('attempt_id', attemptId)
-            .eq('question_id', questionId)
-            .maybeSingle();
+        const { data, error } = await supabase
+            .from('exam_attempts')
+            .update(update)
+            .eq('id', attemptId)
+            .select();
 
-        if (existingResponse) {
-            const updateData: any = { student_answer: studentAnswer };
-            if (isMarkedForReview !== undefined) {
-                updateData.is_marked_for_review = isMarkedForReview;
-            }
-
-            const { error } = await supabase
-                .from('responses')
-                .update(updateData)
-                .eq('id', existingResponse.id);
-            if (error) throw error;
-        } else {
-            const { error } = await supabase
-                .from('responses')
-                .insert({
-                    attempt_id: attemptId,
-                    question_id: questionId,
-                    student_answer: studentAnswer,
-                    is_marked_for_review: isMarkedForReview || false
-                });
-            if (error) throw error;
+        if (error) {
+            console.error('[UPDATE_TIMER] Error:', error);
+            throw error;
         }
+
+        return data;
+    };
+
+    // -------------------------------------------------------------
+    // 5. SAVE RESPONSE & SUBMIT
+    // -------------------------------------------------------------
+    const saveResponse = async ({ attemptId, questionId, answer, isMarkedForReview }: any) => {
+        // ✅ CRITICAL: Match website's format exactly:
+        //   - MCQ:  store as plain UUID string  e.g. "abc-123" (NOT JSON-encoded "\"abc-123\"")
+        //   - MSQ:  store as JSON array          e.g. ["uuid1","uuid2"]
+        //   - NAT:  store as plain string        e.g. "42"
+        // The SQL grading function checks: o.id::text = r.student_answer (for MCQ)
+        // JSON.stringify wraps the UUID in extra quotes which would NEVER match.
+        const studentAnswer = Array.isArray(answer) ? JSON.stringify(answer) : String(answer ?? '');
+
+        // ✅ PERF: Use cached tenant_id — avoid extra SELECT per answer save
+        let tenantId = tenantIdCache.get(attemptId);
+        if (!tenantId) {
+            const { data: attemptData } = await supabase
+                .from('exam_attempts')
+                .select('tenant_id')
+                .eq('id', attemptId)
+                .single();
+            tenantId = attemptData?.tenant_id;
+            if (tenantId) tenantIdCache.set(attemptId, tenantId);
+        }
+
+        await supabase.from('responses').upsert({
+            tenant_id: tenantId,
+            attempt_id: attemptId,
+            question_id: questionId,
+            student_answer: studentAnswer,
+            is_marked_for_review: isMarkedForReview || false,
+            updated_at: new Date().toISOString()
+        }, { onConflict: 'attempt_id, question_id' });
     };
 
     const submitAttempt = async ({ attemptId }: { attemptId: string }) => {
-        // 1. Get attempt to know exam_id
-        const { data: attempt, error: attemptFetchError } = await supabase
-            .from('exam_attempts')
-            .select('*')
-            .eq('id', attemptId)
-            .single();
+        const { data: attempt } = await supabase.from('exam_attempts').select('exam_id').eq('id', attemptId).single();
+        if (!attempt) throw new Error("Attempt not found");
 
-        if (attemptFetchError) throw attemptFetchError;
+        const { data, error } = await supabase.rpc('submit_exam_attempt', {
+            p_attempt_id: attemptId,
+            p_exam_id: attempt.exam_id
+        });
 
-        // 2. Call the Secure RPC
-        // This handles result generation and status update on the server side
-        // avoiding RLS permissions issues for the 'results' table
-        const { data: resultData, error: rpcError } = await supabase
-            .rpc('submit_exam_attempt', {
-                p_attempt_id: attemptId,
-                p_exam_id: attempt.exam_id
-            });
-
-        if (rpcError) {
-            // Handle duplicate submission gracefully
-            if (rpcError.message.includes("already submitted")) {
-                console.warn("Exam was already submitted.");
-                // Fetch existing result just to be safe/consistent
-                const { data: existing } = await supabase
-                    .from("results")
-                    .select("*")
-                    .eq("attempt_id", attemptId)
-                    .maybeSingle();
-
-                // If we have a result, we return the attempt logic as success
-                if (existing) {
-                    return attempt;
-                }
-            }
-            throw rpcError;
-        }
-
-        // Check if RPC returned an error object inside JSON (custom error structure)
-        if (resultData && (resultData as any).error) {
-            throw new Error((resultData as any).error);
-        }
-
-        // Return updated attempt (refetch to get new status)
-        const { data: updatedAttempt, error: refreshError } = await supabase
-            .from('exam_attempts')
-            .select('*')
-            .eq('id', attemptId)
-            .single();
-
-        if (refreshError) throw refreshError;
-
-        return updatedAttempt;
+        if (error) throw error;
+        // Check JSON error result from RPC
+        if (data && (data as any).error) throw new Error((data as any).error);
+        return data;
     };
 
     const fetchExamResult = async (attemptId: string) => {
@@ -294,9 +265,30 @@ export const useExam = (examId?: string) => {
         return data;
     };
 
-    const fetchAttempts = async (studentId: string) => {
-        if (!examId) return [];
+    const { data: exam } = useQuery({
+        queryKey: ['exam_details', examId],
+        queryFn: async () => {
+            if (!examId) return null;
+            const { data } = await supabase.from('exams').select('*').eq('id', examId).single();
+            return data as Exam;
+        },
+        enabled: !!examId
+    });
 
+    const { data: sections } = useQuery({
+        queryKey: ['exam_sections', examId],
+        queryFn: async () => {
+            if (!examId) return [];
+            const { data } = await supabase
+                .from('sections')
+                .select('*, questions(id)')
+                .eq('exam_id', examId);
+            return data as Section[];
+        },
+        enabled: !!examId
+    });
+
+    const fetchAttempts = async (studentId: string) => {
         const { data, error } = await supabase
             .from('exam_attempts')
             .select(`
@@ -311,43 +303,25 @@ export const useExam = (examId?: string) => {
         return data;
     };
 
-    const { data: exam, isLoading: isLoadingExam } = useQuery({
-        queryKey: ['exam', examId],
-        queryFn: fetchExamDetails,
-        enabled: !!examId,
-    });
-
-    const { data: sections, isLoading: isLoadingQuestions } = useQuery({
-        queryKey: ['exam_questions', examId],
-        queryFn: fetchExamQuestions,
-        enabled: !!examId,
-    });
-
-    const startAttemptMutation = useMutation({
-        mutationFn: startAttempt,
-    });
-
-    const saveResponseMutation = useMutation({
-        mutationFn: saveResponse,
-    });
-
-    const submitAttemptMutation = useMutation({
-        mutationFn: submitAttempt,
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['exam_attempts'] });
-        },
-    });
-
     return {
-        exam,
-        sections,
-        isLoading: isLoadingExam || isLoadingQuestions,
+        // New Query Hook
+        fetchSession: (studentId: string) => useQuery({
+            queryKey: ['exam_session', examId, studentId],
+            queryFn: () => fetchExamSession(studentId),
+            enabled: !!examId && !!studentId
+        }),
+
+        // Actions
         checkExamEligibility,
-        startAttempt: startAttemptMutation.mutateAsync,
-        saveResponse: saveResponseMutation.mutateAsync,
-        submitAttempt: submitAttemptMutation.mutateAsync,
-        isSubmitting: submitAttemptMutation.isPending,
+        startAttempt: useMutation({ mutationFn: startAttempt }).mutateAsync,
+        updateTimer: useMutation({ mutationFn: updateTimer }).mutateAsync,
+        saveResponse: useMutation({ mutationFn: saveResponse }).mutateAsync,
+        submitAttempt: useMutation({ mutationFn: submitAttempt }).mutateAsync,
+
+        // Legacy/Helpers
         fetchExamResult,
         fetchAttempts,
+        exam,
+        sections
     };
 };

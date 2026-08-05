@@ -34,5 +34,8 @@ export const useCurrentUser = () => {
             } as User;
         },
         retry: false,
+        staleTime: 1000 * 60 * 10,   // 10 minutes — auth+profile doesn't change often
+        gcTime: 1000 * 60 * 30,       // 30 minutes in memory cache
+        refetchOnWindowFocus: false,
     });
 };
