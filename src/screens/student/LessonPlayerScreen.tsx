@@ -26,6 +26,7 @@ import { useCourseProgress } from '../../hooks/useLessonProgress';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { RootStackParamList, Lesson } from '../../types';
 import { supabase } from '../../services/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { rewardService } from '../../services/rewards';
 import { TENANT_ID } from '../../utils/tenant';
@@ -78,6 +79,51 @@ export const LessonPlayerScreen = () => {
 
         return () => backHandler.remove();
     }, [courseId, navigation]);
+
+    // Offline save state for Text & PDF lessons
+    const [isSavedOffline, setIsSavedOffline] = useState(false);
+
+    useEffect(() => {
+        if (currentLesson?.id) {
+            AsyncStorage.getItem(`offline_lesson_${currentLesson.id}`).then((val) => {
+                setIsSavedOffline(!!val);
+            });
+        }
+    }, [currentLesson?.id]);
+
+    const toggleOfflineSave = async () => {
+        if (!currentLesson) return;
+        try {
+            const key = `offline_lesson_${currentLesson.id}`;
+            if (isSavedOffline) {
+                await AsyncStorage.removeItem(key);
+                setIsSavedOffline(false);
+                Toast.show({
+                    type: 'info',
+                    text1: 'Removed from Offline',
+                    text2: 'Lesson removed from local storage'
+                });
+            } else {
+                const lessonPayload = JSON.stringify({
+                    id: currentLesson.id,
+                    title: currentLesson.title,
+                    content_type: currentLesson.content_type,
+                    content_text: currentLesson.content_text || currentLesson.text_content,
+                    pdf_url: currentLesson.pdf_url || currentLesson.content_url,
+                    savedAt: new Date().toISOString()
+                });
+                await AsyncStorage.setItem(key, lessonPayload);
+                setIsSavedOffline(true);
+                Toast.show({
+                    type: 'success',
+                    text1: 'Saved Offline! 💾',
+                    text2: 'Lesson is now available offline'
+                });
+            }
+        } catch (e) {
+            console.error('Offline save error', e);
+        }
+    };
 
     useEffect(() => {
         if (data?.modules) {
@@ -890,6 +936,23 @@ export const LessonPlayerScreen = () => {
                 </Text>
 
                 <View style={styles.headerRight}>
+                    {(currentLesson.content_type === 'text' || currentLesson.content_type === 'pdf') && (
+                        <TouchableOpacity
+                            style={[
+                                styles.navButton,
+                                isSavedOffline && { backgroundColor: '#DCFCE7', borderColor: '#86EFAC', borderWidth: 1 }
+                            ]}
+                            onPress={toggleOfflineSave}
+                            activeOpacity={0.7}
+                        >
+                            <Ionicons
+                                name={isSavedOffline ? "cloud-done" : "cloud-download-outline"}
+                                size={18}
+                                color={isSavedOffline ? "#166534" : colors.text}
+                            />
+                        </TouchableOpacity>
+                    )}
+
                     <TouchableOpacity
                         style={[styles.navButton, currentLessonIndex === 0 && styles.navButtonDisabled]}
                         onPress={handlePreviousLesson}

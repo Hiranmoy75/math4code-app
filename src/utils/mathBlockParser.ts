@@ -225,6 +225,7 @@ export interface BuildMathHtmlOptions {
     fontSize?: number;
     textColor?: string;
     backgroundColor?: string;
+    instanceId?: string;
 }
 
 export function buildMathHtmlDocument(contentHtml: string, options: BuildMathHtmlOptions = {}): string {
@@ -232,7 +233,8 @@ export function buildMathHtmlDocument(contentHtml: string, options: BuildMathHtm
         isDarkMode = false,
         fontSize = 16,
         textColor = isDarkMode ? '#e2e8f0' : '#1e293b',
-        backgroundColor = 'transparent'
+        backgroundColor = 'transparent',
+        instanceId = ''
     } = options;
 
     return `<!DOCTYPE html>
@@ -243,23 +245,30 @@ export function buildMathHtmlDocument(contentHtml: string, options: BuildMathHtm
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
     <style>
-        * { box-sizing: border-box; }
         html, body {
             margin: 0;
             padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Georgia, serif;
+            width: 100%;
+            height: 100%;
+            overflow: hidden !important;
+            background-color: ${backgroundColor};
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             font-size: ${fontSize}px;
             color: ${textColor};
-            background-color: ${backgroundColor};
-            line-height: 1.8;
+            line-height: 1.45;
             -webkit-font-smoothing: antialiased;
-            overflow: visible;
         }
+        ::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+        *, *::before, *::after { box-sizing: border-box; -ms-overflow-style: none !important; scrollbar-width: none !important; }
 
         .math-preview-root {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
-            padding: 4px 8px 32px 8px;
-            overflow-x: hidden;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
 
         /* ── Typography ───────────────────────────── */
@@ -269,9 +278,19 @@ export function buildMathHtmlDocument(contentHtml: string, options: BuildMathHtm
         .math-h4 { font-size: 1.1em; font-weight: 600; margin: 0.6em 0 0.3em; color: ${isDarkMode ? '#94a3b8' : '#475569'}; }
         .math-h5, .math-h6 { font-size: 1em; font-weight: 600; margin: 0.5em 0 0.2em; color: ${isDarkMode ? '#94a3b8' : '#64748b'}; }
 
-        .math-p { margin: 0.4em 0; }
+        .math-p { margin: 0 0 4px 0; padding: 0; }
+        .math-p:last-child { margin-bottom: 0; }
         .math-spacer { height: 0.6em; }
         .math-hr { border: none; border-top: 2px solid ${isDarkMode ? '#334155' : '#e2e8f0'}; margin: 1.2em 0; }
+
+        .katex-mathml {
+            display: none !important;
+            position: absolute !important;
+            clip: rect(1px, 1px, 1px, 1px) !important;
+            width: 1px !important;
+            height: 1px !important;
+            overflow: hidden !important;
+        }
 
         .math-link { color: #6366f1; text-decoration: underline; }
 
@@ -437,27 +456,29 @@ export function buildMathHtmlDocument(contentHtml: string, options: BuildMathHtm
         ${contentHtml}
     </div>
     <script>
+        var instanceId = "${instanceId}";
+        var lastSentH = 0;
         function sendHeight() {
             try {
-                const contentDiv = document.getElementById('content');
-                if (!contentDiv) return;
-                const rect = contentDiv.getBoundingClientRect();
-                const bodyScroll = document.body ? document.body.scrollHeight : 0;
-                const docScroll = document.documentElement ? document.documentElement.scrollHeight : 0;
-                const bodyOffset = document.body ? document.body.offsetHeight : 0;
-                
-                let fullHeight = Math.max(rect.height, bodyScroll, docScroll, bodyOffset);
-                let finalHeight = Math.ceil(fullHeight + 40);
+                var el = document.getElementById('content');
+                if (!el) return;
 
-                if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-                    window.ReactNativeWebView.postMessage(JSON.stringify({ height: finalHeight }));
+                // Absolute positioning measures pure intrinsic content height
+                var h = Math.ceil(Math.max(el.offsetHeight || 0, el.getBoundingClientRect().height || 0));
+
+                if (h > 0 && Math.abs(h - lastSentH) >= 1) {
+                    lastSentH = h;
+                    var finalHeight = h + 1; // 1px rounding buffer
+                    var msg = JSON.stringify({ id: instanceId, height: finalHeight, type: 'mathHeight' });
+
+                    if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+                        window.ReactNativeWebView.postMessage(msg);
+                    }
+                    if (window.parent && window.parent !== window) {
+                        window.parent.postMessage(msg, '*');
+                    }
                 }
-                if (window.parent && window.parent.postMessage) {
-                    window.parent.postMessage(JSON.stringify({ height: finalHeight, type: 'mathHeight' }), '*');
-                }
-            } catch (e) {
-                console.error('Error sending height:', e);
-            }
+            } catch(e) {}
         }
 
         function renderMath() {
@@ -474,44 +495,34 @@ export function buildMathHtmlDocument(contentHtml: string, options: BuildMathHtm
                         trust: true
                     });
                 }
-                sendHeight();
-            } catch (e) {
-                console.error('KaTeX render error:', e);
-                sendHeight();
-            }
+            } catch (e) {}
+            sendHeight();
         }
 
-        // Trigger on initial execution
-        sendHeight();
-
-        // Trigger on load
         if (typeof renderMathInElement !== 'undefined') {
             renderMath();
         } else {
             window.addEventListener('load', renderMath);
         }
 
-        window.addEventListener('load', function() {
-            sendHeight();
-            const imgs = document.getElementsByTagName('img');
-            for (let i = 0; i < imgs.length; i++) {
-                imgs[i].addEventListener('load', sendHeight);
-            }
-        });
-
-        // Periodic triggers to handle async font/CSS rendering
-        setTimeout(sendHeight, 100);
-        setTimeout(sendHeight, 300);
-        setTimeout(sendHeight, 600);
-        setTimeout(sendHeight, 1200);
+        window.addEventListener('load', sendHeight);
+        window.addEventListener('resize', sendHeight);
 
         if (typeof ResizeObserver !== 'undefined') {
-            new ResizeObserver(sendHeight).observe(document.body);
-            const cDiv = document.getElementById('content');
-            if (cDiv) new ResizeObserver(sendHeight).observe(cDiv);
+            var cEl = document.getElementById('content');
+            if (cEl) {
+                new ResizeObserver(function() {
+                    sendHeight();
+                }).observe(cEl);
+            }
         }
-        window.addEventListener('resize', sendHeight);
+
+        setTimeout(sendHeight, 50);
+        setTimeout(sendHeight, 150);
+        setTimeout(sendHeight, 350);
     </script>
 </body>
 </html>`;
 }
+
+

@@ -159,7 +159,7 @@ export const ExamScreen = () => {
                 }
             } else {
                 // New Attempt
-                const newAttempt = await startAttempt(user?.id || '');
+                const newAttempt = await startAttempt({ studentId: user?.id || '', customTenantId: session?.exam?.tenant_id });
                 setActiveAttempt(newAttempt);
                 setTimeLeft((session?.exam.duration_minutes || 60) * 60);
                 startTimer();

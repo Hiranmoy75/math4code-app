@@ -63,6 +63,10 @@ export const QuestionAnalysisScreen = () => {
                 return;
             }
 
+            const sectionOrderMap = new Map<string, number>(
+                sections.map((s: any, idx: number) => [s.id, s.section_order ?? idx])
+            );
+
             const sectionIds = sections.map((s: any) => s.id);
 
             // ── 2. Fetch all questions for these sections ──
@@ -74,7 +78,15 @@ export const QuestionAnalysisScreen = () => {
 
             if (questionsError) throw questionsError;
 
-            const questionIds = (questionsData || []).map((q: any) => q.id);
+            // Sort questions strictly by section_order first, then question_order
+            const sortedQuestionsData = (questionsData || []).sort((a: any, b: any) => {
+                const sOrderA = sectionOrderMap.get(a.section_id) ?? 0;
+                const sOrderB = sectionOrderMap.get(b.section_id) ?? 0;
+                if (sOrderA !== sOrderB) return sOrderA - sOrderB;
+                return (a.question_order || 0) - (b.question_order || 0);
+            });
+
+            const questionIds = sortedQuestionsData.map((q: any) => q.id);
 
             // ── 3. Fetch all options & responses in parallel ──
             const [optionsResult, responsesResult] = await Promise.all([
@@ -93,19 +105,16 @@ export const QuestionAnalysisScreen = () => {
             if (responsesResult.error) throw responsesResult.error;
 
             // ── 4. Build lookup maps ──
-            // options map: { questionId -> Option[] }
             const optionsMap = new Map<string, any[]>();
             for (const opt of (optionsResult.data || [])) {
                 if (!optionsMap.has(opt.question_id)) optionsMap.set(opt.question_id, []);
                 optionsMap.get(opt.question_id)!.push(opt);
             }
 
-            // response map: { questionId -> student_answer string }
             const responseMap = new Map<string, string | undefined>(
                 (responsesResult.data || []).map((r: any) => [r.question_id, r.student_answer])
             );
 
-            // section map: { sectionId -> section title }
             const sectionMap = new Map<string, string>(
                 sections.map((s: any) => [s.id, s.title || 'Section'])
             );
@@ -113,24 +122,22 @@ export const QuestionAnalysisScreen = () => {
             // ── 5. Assemble questions with responses + correctness ──
             const processedQuestions: QuestionWithResponse[] = [];
 
-            for (const question of (questionsData || [])) {
+            for (const question of sortedQuestionsData) {
                 const sortedOptions = (optionsMap.get(question.id) || [])
                     .sort((a: any, b: any) => (a.option_order || 0) - (b.option_order || 0));
 
                 const studentAnswer = responseMap.get(question.id);
                 const isAttempted = !!studentAnswer && studentAnswer !== '' && studentAnswer !== '[]';
 
-                // ── Correctness check (matches DB SQL grading logic exactly) ──
                 let isCorrect = false;
                 let marksObtained = 0;
 
                 if (isAttempted) {
-                    if (question.question_type === 'MCQ') {
-                        // MCQ: student_answer is a plain UUID string
+                    const qType = (question.question_type || '').toUpperCase().trim();
+                    if (qType === 'MCQ') {
                         const correctOption = sortedOptions.find((opt: any) => opt.is_correct);
                         isCorrect = studentAnswer === correctOption?.id;
-                    } else if (question.question_type === 'MSQ') {
-                        // MSQ: student_answer is a JSON array string e.g. '["uuid1","uuid2"]'
+                    } else if (qType === 'MSQ') {
                         const correctIds = sortedOptions
                             .filter((opt: any) => opt.is_correct)
                             .map((opt: any) => opt.id)
@@ -142,8 +149,7 @@ export const QuestionAnalysisScreen = () => {
                             studentIds = [];
                         }
                         isCorrect = JSON.stringify(correctIds) === JSON.stringify(studentIds);
-                    } else if (question.question_type === 'NAT') {
-                        // NAT: numeric tolerance ±0.01 (same as SQL)
+                    } else if (qType === 'NAT') {
                         try {
                             const diff = parseFloat(studentAnswer!) - parseFloat(question.correct_answer || '0');
                             isCorrect = Math.abs(diff) <= 0.01;
@@ -183,19 +189,23 @@ export const QuestionAnalysisScreen = () => {
         setExpandedQuestions(newExpanded);
     };
 
-    // ── Get option display text by id ──
-    const getOptionText = (question: QuestionWithResponse, optionId: string) => {
-        const option = question.options.find(opt => opt.id === optionId);
-        return option?.option_text || optionId;
+    // ── Get option letter label e.g. "Option A", "Option B" by id ──
+    const getOptionLabel = (question: QuestionWithResponse, optionId: string) => {
+        const idx = question.options.findIndex(opt => opt.id === optionId);
+        if (idx !== -1) {
+            return `Option ${String.fromCharCode(65 + idx)}`;
+        }
+        return optionId;
     };
 
     // ── Check if a student selected this specific option ──
     const isOptionSelectedByStudent = (question: QuestionWithResponse, optionId: string): boolean => {
         if (!question.student_answer || !question.is_attempted) return false;
-        if (question.question_type === 'MCQ') {
+        const qType = (question.question_type || '').toUpperCase().trim();
+        if (qType === 'MCQ') {
             return question.student_answer === optionId;
         }
-        if (question.question_type === 'MSQ') {
+        if (qType === 'MSQ') {
             try {
                 const selected: string[] = JSON.parse(question.student_answer);
                 return selected.includes(optionId);
@@ -206,34 +216,36 @@ export const QuestionAnalysisScreen = () => {
         return false;
     };
 
-    // ── Format student's answer as readable text ──
+    // ── Format student's answer as readable text e.g. "Option A" ──
     const getStudentAnswerDisplay = (question: QuestionWithResponse) => {
         if (!question.is_attempted) return 'Not Answered';
+        const qType = (question.question_type || '').toUpperCase().trim();
 
-        if (question.question_type === 'NAT') {
+        if (qType === 'NAT') {
             return question.student_answer || '—';
         }
 
-        if (question.question_type === 'MSQ') {
+        if (qType === 'MSQ') {
             try {
                 const optionIds: string[] = JSON.parse(question.student_answer!);
-                return optionIds.map(id => getOptionText(question, id)).join(', ');
+                return optionIds.map(id => getOptionLabel(question, id)).join(', ');
             } catch {
-                return getOptionText(question, question.student_answer!);
+                return getOptionLabel(question, question.student_answer!);
             }
         }
 
         // MCQ: plain UUID string
-        return getOptionText(question, question.student_answer!);
+        return getOptionLabel(question, question.student_answer!);
     };
 
-    // ── Format correct answer as readable text ──
+    // ── Format correct answer as readable text e.g. "Option A" ──
     const getCorrectAnswerDisplay = (question: QuestionWithResponse) => {
-        if (question.question_type === 'NAT') {
+        const qType = (question.question_type || '').toUpperCase().trim();
+        if (qType === 'NAT') {
             return question.correct_answer || 'N/A';
         }
         const correctOptions = question.options.filter((opt: any) => opt.is_correct);
-        return correctOptions.map((opt: any) => opt.option_text).join(', ');
+        return correctOptions.map((opt: any) => getOptionLabel(question, opt.id)).join(', ');
     };
 
     // ── Option visual state ──
@@ -388,7 +400,7 @@ export const QuestionAnalysisScreen = () => {
                                     {isExpanded && (
                                         <View style={styles.questionDetails}>
                                             {/* Question Text */}
-                                            <MathText content={question.question_text} textColor="#2D3748" fontSize={14} />
+                                            <MathText content={question.question_text} textColor="#2D3748" fontSize={14} minHeight={24} />
 
                                             {/* Options for MCQ/MSQ — all shown with color coding */}
                                             {(question.question_type === 'MCQ' || question.question_type === 'MSQ') && (
@@ -405,6 +417,7 @@ export const QuestionAnalysisScreen = () => {
                                                                         content={option.option_text}
                                                                         textColor={textColor}
                                                                         fontSize={13}
+                                                                        minHeight={24}
                                                                     />
                                                                 </View>
                                                                 <View style={styles.optionIcons}>
@@ -672,7 +685,8 @@ const styles = StyleSheet.create({
     option: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: spacing.sm,
+        paddingVertical: 6,
+        paddingHorizontal: spacing.sm,
         borderRadius: borderRadius.md,
         backgroundColor: '#F7FAFC',
         borderWidth: 1,
@@ -681,7 +695,8 @@ const styles = StyleSheet.create({
     optionCorrect: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: spacing.sm,
+        paddingVertical: 6,
+        paddingHorizontal: spacing.sm,
         borderRadius: borderRadius.md,
         backgroundColor: '#ECFDF5',
         borderWidth: 1.5,
@@ -690,7 +705,8 @@ const styles = StyleSheet.create({
     optionCorrectSelected: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: spacing.sm,
+        paddingVertical: 6,
+        paddingHorizontal: spacing.sm,
         borderRadius: borderRadius.md,
         backgroundColor: '#D1FAE5',
         borderWidth: 2,
@@ -699,7 +715,8 @@ const styles = StyleSheet.create({
     optionWrongSelected: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: spacing.sm,
+        paddingVertical: 6,
+        paddingHorizontal: spacing.sm,
         borderRadius: borderRadius.md,
         backgroundColor: '#FEF2F2',
         borderWidth: 2,

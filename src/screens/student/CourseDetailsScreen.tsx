@@ -560,15 +560,43 @@ export const CourseDetailsScreen = () => {
                         </View>
                     </View>
                 </View>
-                {!finalIsLocked && (
-                    <TouchableOpacity style={styles.actionButton}>
-                        <Ionicons
-                            name={actionConfig.name as any}
-                            size={24}
-                            color={actionConfig.color}
-                        />
-                    </TouchableOpacity>
-                )}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {isEnrolled && !finalIsLocked && isCompleted && (
+                        <View style={{
+                            paddingHorizontal: 8,
+                            paddingVertical: 3,
+                            borderRadius: 12,
+                            backgroundColor: '#DCFCE7',
+                            borderWidth: 1,
+                            borderColor: '#86EFAC',
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 3,
+                        }}>
+                            <Ionicons
+                                name="checkmark-circle"
+                                size={12}
+                                color="#166534"
+                            />
+                            <Text style={{
+                                fontSize: 10,
+                                fontWeight: '700',
+                                color: "#166534"
+                            }}>
+                                COMPLETED
+                            </Text>
+                        </View>
+                    )}
+                    {!finalIsLocked && (
+                        <TouchableOpacity style={styles.actionButton}>
+                            <Ionicons
+                                name={actionConfig.name as any}
+                                size={22}
+                                color={actionConfig.color}
+                            />
+                        </TouchableOpacity>
+                    )}
+                </View>
             </TouchableOpacity>
         );
     };

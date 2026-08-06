@@ -43,23 +43,49 @@ export const useExam = (examId?: string) => {
         let sections = (sectionsResult.data || []) as Section[];
         const attempts = (attemptsResult.data || []) as ExamAttempt[];
 
-        // --- Shuffle Logic ---
+        // --- Fallback Options Fetching if nested options relation is missing/empty ---
+        const allQuestions = sections.flatMap((s: any) => s.questions || []);
+        const questionsMissingOptions = allQuestions.filter((q: any) => {
+            const qType = (q.question_type || '').toUpperCase().trim();
+            return (qType === 'MCQ' || qType === 'MSQ') && (!q.options || q.options.length === 0);
+        });
+
+        if (questionsMissingOptions.length > 0) {
+            const qIds = questionsMissingOptions.map((q: any) => q.id);
+            const { data: fallbackOptions } = await supabase
+                .from('options')
+                .select('*')
+                .in('question_id', qIds)
+                .order('option_order', { ascending: true });
+
+            if (fallbackOptions && fallbackOptions.length > 0) {
+                const optMap = new Map<string, any[]>();
+                fallbackOptions.forEach((opt: any) => {
+                    if (!optMap.has(opt.question_id)) optMap.set(opt.question_id, []);
+                    optMap.get(opt.question_id)!.push(opt);
+                });
+
+                sections = sections.map((s: any) => ({
+                    ...s,
+                    questions: (s.questions || []).map((q: any) => ({
+                        ...q,
+                        options: (q.options && q.options.length > 0)
+                            ? q.options
+                            : (optMap.get(q.id) || [])
+                    }))
+                }));
+            }
+        }
+
+        // --- Shuffle & Sort Logic ---
         sections = sections.map((section: any) => {
-            // Sort options first (always sort options)
+            // Sort options first (always sort options safely)
             let questions = (section.questions || []).map((q: any) => ({
                 ...q,
-                options: q.options?.sort((a: any, b: any) => a.option_order - b.option_order) || []
+                options: (q.options || []).sort((a: any, b: any) => (a.option_order || 0) - (b.option_order || 0))
             }));
 
-            // Shuffle questions if enabled (DISABLED for stability - prevents re-shuffle on refetch)
-            // if (section.shuffle_questions) {
-            //     for (let i = questions.length - 1; i > 0; i--) {
-            //         const j = Math.floor(Math.random() * (i + 1));
-            //         [questions[i], questions[j]] = [questions[j], questions[i]];
-            //     }
-            // } else {
             questions.sort((a: any, b: any) => (a.question_order || 0) - (b.question_order || 0));
-            // }
 
             return { ...section, questions };
         });
@@ -133,13 +159,30 @@ export const useExam = (examId?: string) => {
     };
 
     // -------------------------------------------------------------
-    // 3. START ATTEMPT (Updated for Pause logic)
+    // 3. START ATTEMPT (Updated for Pause logic & RLS tenant_id safety)
     // -------------------------------------------------------------
-    const startAttempt = async (studentId: string) => {
+    const startAttempt = async (params: { studentId: string; customTenantId?: string } | string) => {
+        const studentId = typeof params === 'string' ? params : params?.studentId;
+        const customTenantId = typeof params === 'object' ? params?.customTenantId : undefined;
+
         if (!studentId) throw new Error("Student ID is required");
-        // Get Tenant ID First
-        const { data: examData } = await supabase.from('exams').select('tenant_id').eq('id', examId).single();
-        const tenantId = examData?.tenant_id;
+
+        // Get Tenant ID First (with fallback to user active membership)
+        let tenantId = customTenantId;
+        if (!tenantId) {
+            const { data: examData } = await supabase.from('exams').select('tenant_id').eq('id', examId).single();
+            tenantId = examData?.tenant_id;
+        }
+
+        if (!tenantId) {
+            const { data: membership } = await supabase
+                .from('user_tenant_memberships')
+                .select('tenant_id')
+                .eq('user_id', studentId)
+                .eq('is_active', true)
+                .maybeSingle();
+            tenantId = membership?.tenant_id;
+        }
 
         // Check existing first (concurrency safety)
         const { data: existing } = await supabase.from('exam_attempts')
@@ -150,7 +193,7 @@ export const useExam = (examId?: string) => {
             .maybeSingle();
 
         if (existing) {
-            // RESUME LOGIC: If paused, we might update last_activity or is_paused=false here
+            // RESUME LOGIC: If paused, update last_activity or is_paused=false
             if (existing.is_paused) {
                 await supabase.from('exam_attempts').update({
                     is_paused: false,
@@ -161,8 +204,7 @@ export const useExam = (examId?: string) => {
             return existing;
         }
 
-        const { data, error } = await supabase.from('exam_attempts').insert({
-            tenant_id: tenantId,
+        const insertPayload: any = {
             exam_id: examId,
             student_id: studentId,
             status: 'in_progress',
@@ -171,9 +213,18 @@ export const useExam = (examId?: string) => {
             elapsed_time_seconds: 0,
             last_activity_at: new Date().toISOString(),
             is_paused: false
-        }).select().single();
+        };
 
-        if (error) throw error;
+        if (tenantId) {
+            insertPayload.tenant_id = tenantId;
+        }
+
+        const { data, error } = await supabase.from('exam_attempts').insert(insertPayload).select().single();
+
+        if (error) {
+            console.error('[START_ATTEMPT_ERROR]', error);
+            throw error;
+        }
         return data as ExamAttempt;
     };
 

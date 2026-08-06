@@ -22,15 +22,26 @@ import { textStyles } from '../../constants/typography';
 import { spacing, borderRadius } from '../../constants/spacing';
 import { useCourses } from '../../hooks/useCourses';
 import { useCategories } from '../../hooks/useCategories';
+import { useWindowDimensions } from 'react-native';
 import { useEnrolledCourses } from '../../hooks/useEnrolledCourses';
 
-const { width } = Dimensions.get('window');
 
 export const CoursesScreen = () => {
     const navigation = useNavigation<any>();
+    const { width } = useWindowDimensions();
+    const numColumns = width >= 800 ? 3 : (width >= 550 ? 2 : 1);
     const { colors, shadows } = useAppTheme();
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
     const [searchQuery, setSearchQuery] = useState('');
+    const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+
+    // Debounce search query to optimize UI re-renders and smooth filtering
+    React.useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedSearchQuery(searchQuery);
+        }, 300);
+        return () => clearTimeout(handler);
+    }, [searchQuery]);
 
     const {
         data,
@@ -39,8 +50,7 @@ export const CoursesScreen = () => {
         hasNextPage,
         fetchNextPage,
         isFetchingNextPage
-    } = useCourses('all'); // Filter is handled in UI for now, but hook supports it.
-    // ideally pass filter state to hook if backend filtering desired.
+    } = useCourses('all');
 
     const { data: enrolledCourses } = useEnrolledCourses();
     const { data: categories } = useCategories();
@@ -53,9 +63,20 @@ export const CoursesScreen = () => {
         return enrolled ? { ...course, ...enrolled, is_enrolled: true } : course;
     }).filter(course => {
         const matchesCategory = selectedCategory === 'all' || course.category === selectedCategory;
-        const matchesSearch = course.title.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesSearch = course.title.toLowerCase().includes(debouncedSearchQuery.toLowerCase());
         return matchesCategory && matchesSearch;
     });
+
+    // Compute course count per category
+    const categoryCounts = React.useMemo(() => {
+        const counts: Record<string, number> = { all: allCourses.length };
+        allCourses.forEach(c => {
+            if (c.category) {
+                counts[c.category] = (counts[c.category] || 0) + 1;
+            }
+        });
+        return counts;
+    }, [allCourses]);
 
     const handleCoursePress = (courseId: string) => {
         navigation.navigate('CourseDetails', { courseId });
@@ -95,32 +116,57 @@ export const CoursesScreen = () => {
                 )}
             </View>
 
-            {/* Categories */}
+            {/* Categories Pills */}
             <View style={{ marginBottom: spacing.md, marginTop: spacing.sm }}>
                 <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ paddingRight: spacing.lg }}
+                    contentContainerStyle={{ paddingRight: spacing.lg, gap: 8 }}
                 >
                     <TouchableOpacity
                         style={[styles.categoryChip, selectedCategory === 'all' && styles.categoryChipActive]}
                         onPress={() => setSelectedCategory('all')}
+                        activeOpacity={0.8}
                     >
                         <Text style={[styles.categoryText, selectedCategory === 'all' && styles.categoryTextActive]}>
                             All
                         </Text>
-                    </TouchableOpacity>
-                    {categories?.map((category) => (
-                        <TouchableOpacity
-                            key={category}
-                            style={[styles.categoryChip, selectedCategory === category && styles.categoryChipActive]}
-                            onPress={() => setSelectedCategory(category)}
-                        >
-                            <Text style={[styles.categoryText, selectedCategory === category && styles.categoryTextActive]}>
-                                {category}
+                        <View style={[
+                            styles.categoryBadge,
+                            selectedCategory === 'all' && styles.categoryBadgeActive
+                        ]}>
+                            <Text style={[
+                                styles.categoryBadgeText,
+                                selectedCategory === 'all' && styles.categoryBadgeTextActive
+                            ]}>
+                                {allCourses.length}
                             </Text>
-                        </TouchableOpacity>
-                    ))}
+                        </View>
+                    </TouchableOpacity>
+
+                    {categories?.map((category) => {
+                        const isSelected = selectedCategory === category;
+                        const count = categoryCounts[category] || 0;
+                        return (
+                            <TouchableOpacity
+                                key={category}
+                                style={[styles.categoryChip, isSelected && styles.categoryChipActive]}
+                                onPress={() => setSelectedCategory(category)}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={[styles.categoryText, isSelected && styles.categoryTextActive]}>
+                                    {category}
+                                </Text>
+                                {count > 0 && (
+                                    <View style={[styles.categoryBadge, isSelected && styles.categoryBadgeActive]}>
+                                        <Text style={[styles.categoryBadgeText, isSelected && styles.categoryBadgeTextActive]}>
+                                            {count}
+                                        </Text>
+                                    </View>
+                                )}
+                            </TouchableOpacity>
+                        );
+                    })}
                 </ScrollView>
             </View>
         </View>
@@ -142,7 +188,10 @@ export const CoursesScreen = () => {
         return (
             <TouchableOpacity
                 key={course.id}
-                style={styles.courseCard}
+                style={[
+                    styles.courseCard,
+                    numColumns > 1 && { flex: 1, marginHorizontal: spacing.xs, marginBottom: spacing.md }
+                ]}
                 activeOpacity={0.9}
                 onPress={() => handleCoursePress(course.id)}
             >
@@ -280,11 +329,13 @@ export const CoursesScreen = () => {
             paddingHorizontal: spacing.lg,
         },
         categoryChip: {
-            paddingHorizontal: spacing.lg,
-            paddingVertical: spacing.sm,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            paddingHorizontal: spacing.md,
+            paddingVertical: spacing.xs + 2,
             borderRadius: borderRadius.full,
             backgroundColor: colors.surface,
-            marginRight: spacing.sm,
             borderWidth: 1,
             borderColor: colors.border,
         },
@@ -300,6 +351,25 @@ export const CoursesScreen = () => {
         categoryTextActive: {
             color: colors.textInverse,
         },
+        categoryBadge: {
+            backgroundColor: colors.surfaceAlt,
+            paddingHorizontal: 6,
+            paddingVertical: 2,
+            borderRadius: 10,
+            minWidth: 18,
+            alignItems: 'center',
+        },
+        categoryBadgeActive: {
+            backgroundColor: 'rgba(255, 255, 255, 0.25)',
+        },
+        categoryBadgeText: {
+            fontSize: 11,
+            fontWeight: '700',
+            color: colors.textSecondary,
+        },
+        categoryBadgeTextActive: {
+            color: '#FFFFFF',
+        },
         content: {
             flex: 1,
             paddingHorizontal: spacing.lg,
@@ -307,15 +377,15 @@ export const CoursesScreen = () => {
         courseCard: {
             backgroundColor: colors.surface,
             borderRadius: borderRadius.xl,
-            marginBottom: spacing.lg,
+            marginBottom: spacing.md,
             overflow: 'hidden',
             ...shadows.medium,
             borderWidth: 1,
             borderColor: colors.border,
-            marginHorizontal: spacing.lg,
+            marginHorizontal: spacing.sm,
         },
         courseThumbnail: {
-            height: 160,
+            height: 150,
             width: '100%',
             backgroundColor: colors.surfaceAlt,
         },
@@ -473,11 +543,14 @@ export const CoursesScreen = () => {
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
             <FlatList
+                key={numColumns}
+                numColumns={numColumns}
                 data={filteredCourses}
                 renderItem={renderCourseItem}
                 keyExtractor={(item) => item.id}
                 ListHeaderComponent={renderHeader}
                 ListFooterComponent={renderFooter}
+                columnWrapperStyle={numColumns > 1 ? { paddingHorizontal: spacing.md, justifyContent: 'space-between' } : undefined}
                 contentContainerStyle={{ paddingBottom: spacing.xl }}
                 showsVerticalScrollIndicator={false}
                 onEndReached={handleLoadMore}

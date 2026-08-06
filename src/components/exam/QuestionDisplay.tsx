@@ -66,95 +66,109 @@ const QuestionDisplayComponent = ({
                         content={question.question_text}
                         textColor={colors.text}
                         fontSize={16}
+                        minHeight={28}
                     />
                 </View>
                 {/* Options */}
                 <View style={styles.optionsContainer}>
-                    {question.question_type === 'MCQ' && question.options?.map((opt, idx) => {
-                        const isSelected = response === opt.id;
-                        return (
-                            <TouchableOpacity
-                                key={opt.id}
-                                onPress={() => onSave(question.id, opt.id)}
-                                activeOpacity={0.7}
-                                style={[
-                                    styles.optionButton,
-                                    isSelected && styles.optionSelected
-                                ]}
-                            >
-                                <View style={[
-                                    styles.radioCircle,
-                                    isSelected && styles.radioSelected
-                                ]}>
-                                    {isSelected ? (
-                                        <Ionicons name="checkmark-sharp" size={14} color="#FFF" />
-                                    ) : (
-                                        <Text style={styles.optionLetter}>{String.fromCharCode(65 + idx)}</Text>
-                                    )}
-                                </View>
-                                <View style={styles.optionContent}>
-                                    <MathText
-                                        content={opt.option_text}
-                                        textColor={isSelected ? colors.primary : colors.text}
-                                        fontSize={15}
+                    {(() => {
+                        const qType = (question.question_type || '').toUpperCase().trim();
+                        if (qType === 'MCQ') {
+                            return question.options?.map((opt, idx) => {
+                                const isSelected = response === opt.id;
+                                return (
+                                    <TouchableOpacity
+                                        key={opt.id}
+                                        onPress={() => onSave(question.id, opt.id)}
+                                        activeOpacity={0.7}
+                                        style={[
+                                            styles.optionButton,
+                                            isSelected && styles.optionSelected
+                                        ]}
+                                    >
+                                        <View style={[
+                                            styles.radioCircle,
+                                            isSelected && styles.radioSelected
+                                        ]}>
+                                            {isSelected ? (
+                                                <Ionicons name="checkmark-sharp" size={14} color="#FFF" />
+                                            ) : (
+                                                <Text style={styles.optionLetter}>{String.fromCharCode(65 + idx)}</Text>
+                                            )}
+                                        </View>
+                                        <View style={styles.optionContent} pointerEvents="none">
+                                            <MathText
+                                                content={opt.option_text || ''}
+                                                textColor={isSelected ? colors.primary : colors.text}
+                                                fontSize={15}
+                                                pointerEvents="none"
+                                            />
+                                        </View>
+                                    </TouchableOpacity>
+                                );
+                            });
+                        }
+
+                        if (qType === 'MSQ') {
+                            return question.options?.map((opt, idx) => {
+                                const current = Array.isArray(response) ? response : [];
+                                const isSelected = current.includes(opt.id);
+                                return (
+                                    <TouchableOpacity
+                                        key={opt.id}
+                                        onPress={() => {
+                                            const next = isSelected
+                                                ? current.filter((x: string) => x !== opt.id)
+                                                : [...current, opt.id];
+                                            onSave(question.id, next);
+                                        }}
+                                        activeOpacity={0.7}
+                                        style={[
+                                            styles.optionButton,
+                                            isSelected && styles.optionSelected
+                                        ]}
+                                    >
+                                        <View style={[
+                                            styles.checkboxSquare,
+                                            isSelected && styles.checkboxSelected
+                                        ]}>
+                                            {isSelected ? (
+                                                <Ionicons name="checkmark-sharp" size={14} color="#FFF" />
+                                            ) : (
+                                                <Text style={styles.optionLetter}>{String.fromCharCode(65 + idx)}</Text>
+                                            )}
+                                        </View>
+                                        <View style={styles.optionContent} pointerEvents="none">
+                                            <MathText
+                                                content={opt.option_text || ''}
+                                                textColor={isSelected ? colors.primary : colors.text}
+                                                fontSize={15}
+                                                pointerEvents="none"
+                                            />
+                                        </View>
+                                    </TouchableOpacity>
+                                );
+                            });
+                        }
+
+                        if (qType === 'NAT') {
+                            return (
+                                <View style={styles.natContainer}>
+                                    <Text style={styles.natLabel}>Your Answer:</Text>
+                                    <TextInput
+                                        style={styles.natInput}
+                                        placeholder="Enter numeric value..."
+                                        placeholderTextColor={colors.textSecondary}
+                                        keyboardType="numeric"
+                                        value={response ? String(response) : ''}
+                                        onChangeText={(text) => onSave(question.id, text)}
                                     />
                                 </View>
-                            </TouchableOpacity>
-                        );
-                    })}
+                            );
+                        }
 
-                    {question.question_type === 'MSQ' && question.options?.map((opt, idx) => {
-                        const current = Array.isArray(response) ? response : [];
-                        const isSelected = current.includes(opt.id);
-                        return (
-                            <TouchableOpacity
-                                key={opt.id}
-                                onPress={() => {
-                                    const next = isSelected
-                                        ? current.filter((x: string) => x !== opt.id)
-                                        : [...current, opt.id];
-                                    onSave(question.id, next);
-                                }}
-                                activeOpacity={0.7}
-                                style={[
-                                    styles.optionButton,
-                                    isSelected && styles.optionSelected
-                                ]}
-                            >
-                                <View style={[
-                                    styles.checkboxSquare,
-                                    isSelected && styles.checkboxSelected
-                                ]}>
-                                    {isSelected ? (
-                                        <Ionicons name="checkmark-sharp" size={14} color="#FFF" />
-                                    ) : (
-                                        <Text style={styles.optionLetter}>{String.fromCharCode(65 + idx)}</Text>
-                                    )}
-                                </View>
-                                <View style={styles.optionContent}>
-                                    <MathText
-                                        content={opt.option_text}
-                                        textColor={isSelected ? colors.primary : colors.text}
-                                        fontSize={15}
-                                    />
-                                </View>
-                            </TouchableOpacity>
-                        );
-                    })}
-
-                    {question.question_type === 'NAT' && (
-                        <View style={styles.natContainer}>
-                            <Text style={styles.natLabel}>Your Answer:</Text>
-                            <TextInput
-                                style={styles.natInput}
-                                placeholder="Enter numeric value..."
-                                placeholderTextColor={colors.textSecondary}
-                                keyboardType="numeric"
-                                value={response ? String(response) : ''}
-                                onChangeText={(text) => onSave(question.id, text)}
-                            />
-                        </View>
-                    )}
+                        return null;
+                    })()}
                 </View>
                 <View style={{ height: 100 }} />
             </ScrollView>

@@ -90,6 +90,7 @@ export interface Exam {
     show_answers?: boolean;
     show_results_immediately?: boolean;
     allow_pause?: boolean;
+    tenant_id?: string;
 }
 
 export interface Section {

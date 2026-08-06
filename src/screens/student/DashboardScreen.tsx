@@ -607,7 +607,6 @@ const styles = StyleSheet.create({
     },
     searchBar: {
         flexDirection: 'row',
-
         alignItems: 'center',
         marginHorizontal: spacing.lg,
         marginTop: spacing.sm,
@@ -616,6 +615,12 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing.lg,
         borderRadius: borderRadius.full,
         borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.25)',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 10,
+        elevation: 3,
     },
     searchText: {
         fontSize: 14,
